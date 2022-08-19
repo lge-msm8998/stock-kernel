@@ -1843,7 +1843,7 @@ static int debug_mtp_read_stats(struct seq_file *s, void *unused)
 	}
 
 	seq_printf(s, "vfs_write(time in usec) min:%d\t max:%d\t avg:%d\n",
-				min, max, (iteration ? ( sum / iteration) : 0));
+						min, max, sum / iteration);
 	min = max = sum = iteration = 0;
 	seq_puts(s, "\n=======================\n");
 	seq_puts(s, "MTP Read Stats:\n");
@@ -1865,7 +1865,7 @@ static int debug_mtp_read_stats(struct seq_file *s, void *unused)
 	}
 
 	seq_printf(s, "vfs_read(time in usec) min:%d\t max:%d\t avg:%d\n",
-				min, max, (iteration ? ( sum / iteration) : 0));
+						min, max, sum / iteration);
 	spin_unlock_irqrestore(&dev->lock, flags);
 	return 0;
 }
@@ -2154,7 +2154,8 @@ struct usb_function *function_alloc_mtp_ptp(struct usb_function_instance *fi,
 	dev->function.free_func = mtp_free;
 #ifdef CONFIG_LGE_USB_GADGET_MULTI_CONFIG
 	dev->function.set_config = mtp_function_set_config;
-	dev->function.set_mac_os = mtp_function_set_mac_os;
+	if(mtp_config)
+		dev->function.set_mac_os = mtp_function_set_mac_os;
 	dev->function.multi_config_support = true;
 	dev->function.priv = dev;
 #endif

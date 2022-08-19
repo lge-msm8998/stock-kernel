@@ -1035,7 +1035,7 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	WARN_ON(!host->claimed);
 
 	#ifdef CONFIG_MACH_LGE
-	/* LGE_CHANGE, BSP-FS@lge.com
+	/* LGE_CHANGE, 2015-09-23, H1-BSP-FS@lge.com
 	 * When uSD is not inserted, return proper error-value.
 	 */
 	if (!mmc_gpio_get_cd(host)) {
@@ -1233,27 +1233,9 @@ static void mmc_sd_detect(struct mmc_host *host)
 		break;
 	}
 	if (!retries) {
-#ifdef CONFIG_MACH_LGE
-		printk(KERN_ERR "%s(%s): Unable to re-detect card (%d)\n",
-				__func__, mmc_hostname(host), err);
-		mmc_power_off(host);
-		usleep_range(5000, 5500);
-		mmc_power_up(host,host->card->ocr);
-		mmc_select_voltage(host, host->card->ocr);
-		err = mmc_sd_init_card(host, host->card->ocr, host->card);
-		if (err) {
-			printk(KERN_ERR "%s: Re-init card in mmc_sd_detect() rc = %d (retries = %d)\n",
-				 mmc_hostname(host), err, retries);
-			err = _mmc_detect_card_removed(host);
-		} else {
-			printk(KERN_ERR "%s(%s): Re-init card success in mmc_sd_detect()\n",
-				__func__,mmc_hostname(host));
-		}
-#else
 		printk(KERN_ERR "%s(%s): Unable to re-detect card (%d)\n",
 		       __func__, mmc_hostname(host), err);
 		err = _mmc_detect_card_removed(host);
-#endif
 	}
 #else
 	err = _mmc_detect_card_removed(host);
@@ -1356,7 +1338,7 @@ static int _mmc_sd_resume(struct mmc_host *host)
 		err = mmc_sd_init_card(host, host->card->ocr, host->card);
 
 		#ifdef CONFIG_MACH_LGE
-		       /* LGE_CHANGE, BSP-FS@lge.com
+		       /* LGE_CHANGE, 2015-09-23, H1-BSP-FS@lge.com
 			* Skip below When ENOMEDIUM
 			*/
 			if (err == -ENOMEDIUM) {
@@ -1379,22 +1361,13 @@ static int _mmc_sd_resume(struct mmc_host *host)
 #else
 	err = mmc_sd_init_card(host, host->card->ocr, host->card);
 #endif
-#ifdef CONFIG_MACH_LGE
-	mmc_card_clr_suspended(host->card);
 	if (err) {
 		pr_err("%s: %s: mmc_sd_init_card_failed (%d)\n",
 				mmc_hostname(host), __func__, err);
-		goto out;
-	}
-#else
-	if (err) {
-		pr_err("%s: %s: mmc_sd_init_card_failed (%d)\n",
-						mmc_hostname(host), __func__, err);
 		mmc_power_off(host);
 		goto out;
 	}
 	mmc_card_clr_suspended(host->card);
-#endif
 
 	if (host->card->sdr104_blocked)
 		goto out;
@@ -1496,32 +1469,13 @@ int mmc_attach_sd(struct mmc_host *host)
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
 	int retries;
 #endif
-#ifdef CONFIG_MACH_LGE
-	int i = 0;
-#endif
 
 	BUG_ON(!host);
 	WARN_ON(!host->claimed);
 
-#ifdef CONFIG_MACH_LGE
-	for(i = 0; i < 3; i++) {
-		err = mmc_send_app_op_cond(host, 0, &ocr);
-		printk(KERN_ERR "[LGE][%s]mmc_send_app_op_cond : %d\n", __func__, err);
-		if (err) {
-			mmc_power_cycle(host, host->ocr_avail);
-			mmc_go_idle(host);
-			mmc_send_if_cond(host, host->ocr_avail);
-			printk(KERN_ERR "[LGE][%s]after mmc_power_cycle %d\n", __func__, i);
-		} else {
-			break;
-		}
-	}
-#else
 	err = mmc_send_app_op_cond(host, 0, &ocr);
-	printk(KERN_ERR "[LGE][%s]after mmc_send_app_op_cond %d\n", __func__, err);
 	if (err)
 		return err;
-#endif
 
 	mmc_attach_bus(host, &mmc_sd_ops);
 	if (host->ocr_avail_sd)

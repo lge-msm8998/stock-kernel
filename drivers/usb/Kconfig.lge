@@ -125,6 +125,13 @@ config LGE_USB_MOISTURE_DETECTION
 	help
 	  Say y if this must be needed.
 
+config LGE_USB_LGMD18
+	boolean "LGE USB Moisture Detector in 2018"
+	select IIO
+	select IIO_BUFFER
+	help
+	  Support moisture deteator in 2018.
+
 config LGE_USB_COMPLIANCE_TEST
 	bool "USB Compliance test"
 	help

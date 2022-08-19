@@ -3728,8 +3728,7 @@ static void hdd_get_peer_rssi_cb(struct sir_peer_info_resp *sta_rssi,
 }
 
 int wlan_hdd_get_peer_rssi(hdd_adapter_t *adapter,
-			   struct qdf_mac_addr *macaddress,
-			   int request_source)
+			   struct qdf_mac_addr *macaddress)
 {
 	QDF_STATUS status;
 	void *cookie;
@@ -3766,7 +3765,7 @@ int wlan_hdd_get_peer_rssi(hdd_adapter_t *adapter,
 	if (status != QDF_STATUS_SUCCESS) {
 		hdd_err("Unable to retrieve statistics for rssi");
 		ret = -EFAULT;
-	} else if (request_source != HDD_WLAN_GET_PEER_RSSI_SOURCE_DRIVER) {
+	} else {
 		ret = hdd_request_wait_for_response(request);
 		if (ret) {
 			hdd_err("SME timed out while retrieving rssi");
@@ -3776,8 +3775,6 @@ int wlan_hdd_get_peer_rssi(hdd_adapter_t *adapter,
 			adapter->peer_sta_info = priv->peer_sta_info;
 			ret = 0;
 		}
-	} else {
-		ret = 0;
 	}
 
 	hdd_request_put(request);
@@ -5645,9 +5642,8 @@ static void hdd_get_class_a_statistics_cb(void *stats, void *context)
 	tCsrGlobalClassAStatsInfo *returned_stats;
 
 	ENTER();
-	if ((NULL == stats) || (NULL == context)) {
-		hdd_err("Bad param, stats [%p] context [%p]",
-			stats, context);
+	if (NULL == stats) {
+		hdd_err("Bad param, stats");
 		return;
 	}
 
@@ -5757,9 +5753,8 @@ static void hdd_get_station_statistics_cb(void *stats, void *context)
 	tCsrGlobalClassAStatsInfo *class_a_stats;
 	struct csr_per_chain_rssi_stats_info *per_chain_rssi_stats;
 
-	if ((NULL == stats) || (NULL == context)) {
-		hdd_err("Bad param, pStats [%p] pContext [%p]",
-			stats, context);
+	if (NULL == stats) {
+		hdd_err("Bad param, pStats [%p]", stats);
 		return;
 	}
 
@@ -5935,7 +5930,7 @@ void wlan_hdd_change_country_code_callback(void *context)
 	hdd_adapter_t *adapter = context;
 
 	if (adapter && (WLAN_HDD_ADAPTER_MAGIC == adapter->magic))
-		qdf_event_set(&adapter->change_country_code);
+		complete(&adapter->change_country_code);
 }
 
 /**
@@ -7147,7 +7142,7 @@ static void hdd_get_temperature_cb(int temperature, void *context)
  * returned, otherwise a negative errno is returned.
  *
  */
-int wlan_hdd_get_temperature(hdd_adapter_t *pAdapter, int *temperature)
+int wlan_hdd_get_temperature(hdd_adapter_t *p_adapter, int *temperature)
 {
 	QDF_STATUS status;
 	int ret;
@@ -7160,7 +7155,7 @@ int wlan_hdd_get_temperature(hdd_adapter_t *pAdapter, int *temperature)
 	};
 
 	ENTER();
-	if (NULL == pAdapter) {
+	if (!p_adapter) {
 		hdd_err("pAdapter is NULL");
 		return -EPERM;
 	}
@@ -7171,7 +7166,7 @@ int wlan_hdd_get_temperature(hdd_adapter_t *pAdapter, int *temperature)
 		return -ENOMEM;
 	}
 	cookie = hdd_request_cookie(request);
-	status = sme_get_temperature(WLAN_HDD_GET_HAL_CTX(pAdapter),
+	status = sme_get_temperature(WLAN_HDD_GET_HAL_CTX(p_adapter),
 				     cookie, hdd_get_temperature_cb);
 	if (QDF_STATUS_SUCCESS != status) {
 		hdd_err("Unable to retrieve temperature");
@@ -7183,7 +7178,7 @@ int wlan_hdd_get_temperature(hdd_adapter_t *pAdapter, int *temperature)
 			/* update the adapter with the fresh results */
 			priv = hdd_request_priv(request);
 			if (priv->temperature)
-				pAdapter->temperature = priv->temperature;
+				p_adapter->temperature = priv->temperature;
 		}
 	}
 
@@ -7194,7 +7189,7 @@ int wlan_hdd_get_temperature(hdd_adapter_t *pAdapter, int *temperature)
 	 */
 	hdd_request_put(request);
 
-	*temperature = pAdapter->temperature;
+	*temperature = p_adapter->temperature;
 	EXIT();
 	return 0;
 }
@@ -8744,10 +8739,22 @@ static int __iw_setnone_getint(struct net_device *dev,
 	case WE_GET_NSS:
 	{
 		sme_get_config_param(hHal, sme_config);
+#if 0
 		*value = (sme_config->csrConfig.enable2x2 == 0) ? 1 : 2;
 		if (wma_is_current_hwmode_dbs())
 			*value = *value - 1;
 		hdd_debug("GET_NSS: Current NSS:%d", *value);
+#endif
+		//LGE_CHANGE_S, 18.04.18, protocol-wifi@lge.com, Change DBS mode check in WCN399X
+		if (wma_is_current_hwmode_dbs()) {
+			hdd_debug("GET_NSS: Current mode is DBS.");
+			*value = 1;
+		}
+		else {
+			hdd_debug("GET_NSS: Current mode isn't DBS.");
+			*value = 0;
+		}
+		//LGE_CHANGE_E, 18.04.18, protocol-wifi@lge.com, Change DBS mode check in WCN399X
 		break;
 	}
 
@@ -8987,8 +8994,7 @@ static int __iw_setnone_getint(struct net_device *dev,
 		if (QDF_STATUS_SUCCESS !=
 		    sme_cfg_get_int(hHal, WNI_CFG_CURRENT_TX_POWER_LEVEL,
 				    &txpow2g)) {
-			ret = -EIO;
-			break;
+			return -EIO;
 		}
 		hdd_debug("2G tx_power %d", txpow2g);
 		break;
@@ -9006,8 +9012,7 @@ static int __iw_setnone_getint(struct net_device *dev,
 		if (QDF_STATUS_SUCCESS !=
 		    sme_cfg_get_int(hHal, WNI_CFG_CURRENT_TX_POWER_LEVEL,
 				    &txpow5g)) {
-			ret = -EIO;
-			break;
+			return -EIO;
 		}
 		hdd_debug("5G tx_power %d", txpow5g);
 		break;
@@ -11944,9 +11949,9 @@ int hdd_set_band(struct net_device *dev, u8 ui_band)
 	if ((band == SIR_BAND_2_4_GHZ &&
 	     pHddCtx->config->nBandCapability == SIR_BAND_5_GHZ) ||
 	    (band == SIR_BAND_5_GHZ &&
-	     pHddCtx->config->nBandCapability == SIR_BAND_2_4_GHZ) /* ||
+	     pHddCtx->config->nBandCapability == SIR_BAND_2_4_GHZ) ||
 	    (band == SIR_BAND_ALL &&
-	     pHddCtx->config->nBandCapability != SIR_BAND_ALL) */ ) {  // LGE_PATCH
+	     pHddCtx->config->nBandCapability != SIR_BAND_ALL)) {
 		hdd_err("band value %u violate INI settings %u",
 			  band, pHddCtx->config->nBandCapability);
 		return -EIO;

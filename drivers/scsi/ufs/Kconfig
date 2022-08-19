@@ -124,24 +124,3 @@ config SCSI_UFSHCD_CMD_LOGGING
 
 	  Select this if you want above mentioned debug information captured.
 	  If unsure, say N.
-
-config UFSDBG_TUNABLES
-	bool "UFS tunables test"
-	depends on SCSI_UFSHCD && DEBUG_FS
-	default n
-	---help---
-	This Feature adds debug fs nodes for ufs tunables
-
-config LGE_IOSCHED_EXTENSION
-	bool "extension I/O schedule"
-	default y
-	help
-	  for extension scheduling for I/O
-
-config UFSDBG_SYSFS_COMMON
-	bool "UFS SYSFS COMMON"
-	depends on SCSI_UFSHCD && DEBUG_FS
-	default y
-	---help---
-	This Feature adds sysfs for common access
-

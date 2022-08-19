@@ -74,7 +74,6 @@
 		qcom,mdss-dsi-panel-peak-brightness = <5643000>;		/* max. 500nits */
 		qcom,mdss-dsi-panel-blackness-level = <6134>;
 		lge,color-manager-default-status = <1>;
-		lge,aod-interface-data = <0x112>; /* QHD = 1, FHD = 1, HD = 2 */
 
 		qcom,mdss-dsi-on-command = [
 			39 01 00 00 00 00 03 B0 20 43
@@ -265,50 +264,6 @@
 		lge,esd-detect-command = [
 			39 01 00 00 00 00 03 EE D0 0D
 			];
-		lge,digital-gamma-cmds-2500K = [
-			39 00 00 00 00 00 0A CF 03 05 AF 03 01 5A 01 00 15
-			39 01 00 00 00 00 1C D0 00 FF 80 00 80 00 80 00 80 00 11 62 C4 27 89 EB 4D AF 00 BD 38 6F A7 DF 16 4E 86
-			];
-		lge,digital-gamma-cmds-3000K = [
-			39 00 00 00 00 00 0A CF 03 05 AF 03 01 6A 02 00 55
-			39 01 00 00 00 00 1C D0 00 FF 80 00 80 00 80 00 80 00 47 69 D2 3B A4 0D 76 DF 00 27 45 8A CF 14 59 9E E3
-			];
-		lge,digital-gamma-cmds-3500K = [
-			39 00 00 00 00 00 0A CF 03 05 AF 03 01 6B 02 00 56
-			39 01 00 00 00 00 1C D0 00 FF 80 00 80 00 80 00 80 00 72 6E DD 4B B9 28 96 04 00 82 50 A1 F1 42 92 E2 33
-			];
-		lge,digital-gamma-cmds-4000K = [
-			39 00 00 00 00 00 0A CF 03 05 AF 03 01 6B 02 01 5A
-			39 01 00 00 00 00 1C D0 00 FF 80 00 80 00 80 00 80 00 94 73 E5 58 CA 3D AF 22 00 CB 59 B3 0C 66 BF 19 72
-			];
-		lge,digital-gamma-cmds-4500K = [
-			39 00 00 00 00 00 0A CF 03 05 AF 03 01 6B 03 01 5A
-			39 01 00 00 00 00 1C D0 00 FF 80 00 80 00 80 00 80 00 AD 76 EC 61 D7 4D C3 38 00 0C 62 C3 25 86 E8 49 AB
-			];
-		lge,digital-gamma-cmds-5000K = [
-			39 00 00 00 00 00 0A CF 03 05 AF 03 01 6B 03 01 6A
-			39 01 00 00 00 00 1C D0 00 FF 80 00 80 00 80 00 80 00 C1 78 F0 69 E1 59 D1 49 00 45 69 D1 3A A3 0C 74 DD
-			];
-		lge,digital-gamma-cmds-5500K = [
-			39 00 00 00 00 00 0A CF 03 05 AF 03 01 6B 03 01 6B
-			39 01 00 00 00 00 1C D0 00 FF 80 00 80 00 80 00 80 00 D1 7A F4 6F E9 63 DD 58 00 77 6F DE 4D BC 2B 9A 09
-			];
-		lge,digital-gamma-cmds-6000K = [
-			39 00 00 00 00 00 0A CF 03 05 AF 03 01 6B 03 01 6B
-			39 01 00 00 00 00 1C D0 00 FF 80 00 80 00 80 00 80 00 DD 7C F8 73 EF 6B E7 62 00 9F 74 E8 5C D0 44 B8 2C
-			];
-		lge,digital-gamma-cmds-6500K = [
-			39 00 00 00 00 00 0A CF 03 05 AF 03 01 6B 03 01 6B
-			39 01 00 00 00 00 1C D0 00 FF 80 00 80 00 80 00 80 00 EA 7D FB 78 F5 73 F0 6D 00 C2 78 F1 69 E1 5A D2 4A
-			];
-		lge,digital-gamma-cmds-7000K = [
-			39 00 00 00 00 00 0A CF 03 05 AF 03 01 6B 03 01 6B
-			39 01 00 00 00 00 1C D0 00 FF 80 00 80 00 80 00 80 00 F6 7F FE 7D FB 7A F9 78 00 E1 7C F9 75 F1 6D EA 66
-			];
-		lge,digital-gamma-cmds-dummy = [
-			39 00 00 00 00 00 0A CF 00 00 00 00 00 00 00 00 00
-			39 01 00 00 00 00 1C D0 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-			];
 		lge,blmap = <
 			3
 			27 27 27 27 27 27 27 27 27 27 27 27 27 27 27 28 28 28 29 29
@@ -494,6 +449,9 @@
 
 		qcom,mdss-dsc-version = <0x11>;
 		qcom,mdss-dsc-scr-version = <0x1>;
+
+		lge,panel-type = "LGD/SiW - SW43402 cmd panel";
+		lge,panel-id = <0>;
 	};
 };
 &spmi_bus {

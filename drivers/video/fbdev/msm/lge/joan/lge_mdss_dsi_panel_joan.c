@@ -21,24 +21,35 @@
 #include <linux/input/lge_touch_notify.h>
 #include <soc/qcom/lge/board_lge.h>
 #include "../lge_mdss_dsi_panel.h"
-#if defined(CONFIG_LGE_DISPLAY_CONTROL)
-#include "../lge_display_control.h"
-#endif /* CONFIG_LGE_DISPLAY_CONTROL */
-#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMFORT_MODE)
-#include "../lge_comfort_view.h"
-#endif /* CONFIG_LGE_DISPLAY_COMFORT_MODE */
-#if defined(CONFIG_LGE_DISPLAY_ERROR_DETECT)
-#include "../lge_error_detect.h"
-#endif /* CONFIG_LGE_DISPLAY_ERROR_DETECT */
-#if defined(CONFIG_LGE_MIPI_JOAN_ONCELL_QHD_CMD_PANEL)
+#include <soc/qcom/lge/power/lge_board_revision.h>
 #include <soc/qcom/lge/board_lge.h>
-#endif /* CONFIG_LGE_MIPI_JOAN_ONCELL_QHD_CMD_PANEL */
-#if defined(CONFIG_LGE_DISPLAY_INTERNAL_TEST)
-#include "lge_internal_test.h"
-#endif /* CONFIG_LGE_DISPLAY_INTERNAL_TEST */
-#if defined(CONFIG_LGE_DISPLAY_BRIGHTNESS_DIMMING)
-#include "../lge_display_control.h"
-#endif /* CONFIG_LGE_DISPLAY_BRIGHTNESS_DIMMING */
+
+#undef MODULE_PARAM_PREFIX
+#define MODULE_PARAM_PREFIX "lge."
+enum lge_panel_version {
+	LGE_PANEL_V0 = 0,
+	LGE_PANEL_V1,
+	LGE_PANEL_MAX
+};
+static int panel_flag = LGE_PANEL_V1;
+static int param_set_panel_flag(const char *val, const struct kernel_param *kp)
+{
+	if (!strcmp(val, "V1")) {
+		panel_flag = LGE_PANEL_V1;
+	} else {
+		panel_flag = 0;
+	}
+	return 0;
+}
+static int param_get_panel_flag(char *buf, const struct kernel_param *kp)
+{
+	return scnprintf(buf, PAGE_SIZE-1, "%d", panel_flag);
+}
+static struct kernel_param_ops panel_flag_ops = {
+	.set = param_set_panel_flag,
+	.get = param_get_panel_flag,
+};
+module_param_cb(panel_flag, &panel_flag_ops, NULL, S_IRUGO);
 
 extern struct mdss_panel_data *pdata_base;
 extern int mdss_dsi_parse_dcs_cmds(struct device_node *np,
@@ -197,11 +208,6 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			pr_debug("Reset panel done\n");
 		}
 	} else {
-#if defined(CONFIG_LGE_DISPLAY_ERROR_DETECT)
-		if (ctrl_pdata->err_irq_enabled) {
-			lge_dsi_irq_control(ctrl_pdata, false);
-		}
-#endif
 		if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
 			gpio_set_value((ctrl_pdata->bklt_en_gpio), 0);
 			gpio_free(ctrl_pdata->bklt_en_gpio);
@@ -230,9 +236,6 @@ extern void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
-#if defined(CONFIG_LGE_DISPLAY_CONTROL)
-	struct lge_mdss_dsi_ctrl_pdata *lge_ctrl_pdata = NULL;
-#endif
 	struct mdss_panel_info *pinfo;
 	struct dsi_panel_cmds *on_cmds;
 	int ret = 0;
@@ -245,9 +248,6 @@ int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	pinfo = &pdata->panel_info;
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
-#if defined(CONFIG_LGE_DISPLAY_CONTROL)
-	lge_ctrl_pdata = ctrl->lge_ctrl_pdata;
-#endif
 
 	pr_info("ndx=%d\n", ctrl->ndx);
 
@@ -274,30 +274,6 @@ int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	if (ctrl->ds_registered)
 		mdss_dba_utils_video_on(pinfo->dba_data, pinfo);
 
-#if defined(CONFIG_LGE_DISPLAY_CONTROL)
-#if defined(CONFIG_LGE_DISPLAY_COLOR_MANAGER)
-	lge_set_screen_mode(ctrl, true);
-#endif
-
-#if defined(CONFIG_LGE_DISPLAY_COMFORT_MODE)
-	if (lge_ctrl_pdata->comfort_view) {
-		lge_mdss_comfort_view_cmd_send(pdata, lge_ctrl_pdata->comfort_view);
-		lge_ctrl_pdata->dgc_status = 0x01;
-		lge_display_control_store(ctrl, true);
-	}
-#endif
-#endif
-
-#if defined(CONFIG_LGE_DISPLAY_ERROR_DETECT)
-	lge_mdss_dsi_panel_err_cmds_send(ctrl, DSI_LP_MODE);
-	if (!ctrl->err_irq_enabled) {
-		lge_dsi_irq_control(ctrl, true);
-	}
-#endif
-
-#if defined(CONFIG_LGE_DISPLAY_BRIGHTNESS_DIMMING)
-	lge_bc_dim_set(ctrl, BC_DIM_ON, BC_DIM_FRAMES_NORMAL);
-#endif /* CONFIG_LGE_DISPLAY_BRIGHTNESS_DIMMING */
 end:
 	pr_info("-\n");
 	return ret;
@@ -350,7 +326,7 @@ void lge_mdss_panel_parse_dt_blmaps_joan(struct device_node *np,
 	char blmap_rev[30];
 	enum lge_panel_version p_ver = LGE_PANEL_V1;
 
-	struct lge_mdss_dsi_ctrl_pdata *lge_ctrl_pdata = ctrl_pdata->lge_ctrl_pdata;
+	struct lge_mdss_dsi_ctrl_pdata *lge_extra = &ctrl_pdata.lge_extra;
 	struct mdss_panel_info *pinfo = &(ctrl_pdata->panel_data.panel_info);
 
 	pinfo->blmap_size = 512;
@@ -360,10 +336,10 @@ void lge_mdss_panel_parse_dt_blmaps_joan(struct device_node *np,
 		return;
 
 	if(lge_get_board_rev_no() < HW_REV_1_0)
-		p_ver = lge_get_panel_flag_status();
+		p_ver = panel_flag;
 
 	for (i = 0; i < LGE_BLMAPMAX; i++) {
-		snprintf(blmap_rev, sizeof(blmap_rev),lge_ctrl_pdata->lge_blmap_list[i]);
+		snprintf(blmap_rev, sizeof(blmap_rev),lge_extra->lge_blmap_list[i]);
 
 		if(p_ver == LGE_PANEL_V1)
 			strcat(blmap_rev, "_v1");
@@ -393,15 +369,6 @@ void lge_mdss_panel_parse_dt_blmaps_joan(struct device_node *np,
 
 	}
 
-#if defined(CONFIG_LGE_FACTORY_BIST_MODE)
-	if(lge_get_factory_boot() == true) {
-		mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->factory_bist_on_cmds,
-		"lge,bist-on-cmds", "lge,mdss-dsi-hs-command-state");
-		mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->factory_bist_off_cmds,
-		"lge,bist-off-cmds", "lge,mdss-dsi-hs-command-state");
-	}
-#endif /* CONFIG_LGE_FACTORY_BIST_MODE */
-
 	kfree(array);
 	return;
 
@@ -416,30 +383,22 @@ error:
 void lge_mdss_panel_parse_dt_panel_ctrl_joan(struct device_node *np,
 				   struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
-#if defined(CONFIG_LGE_DISPLAY_INTERNAL_TEST)
-	mdss_dsi_parse_internal_dcs_cmds(np, ctrl_pdata);
-#endif
 }
 
 int lge_mdss_panel_create_panel_sysfs_joan(struct class *panel)
 {
 	int rc = 0;
-#if defined(CONFIG_LGE_DISPLAY_INTERNAL_TEST)
-	if (lge_internal_test_create_sysfs(panel) < 0) {
-		pr_err("fail to create internal test sysfs\n");
-	}
-#endif /* CONFIG_LGE_DISPLAY_INTERNAL_TEST */
 
 	return rc;
 }
 
-int lge_mdss_dsi_panel_init_sub(struct lge_mdss_dsi_ctrl_pdata *lge_ctrl_pdata)
+int lge_mdss_dsi_panel_init_sub(struct lge_mdss_dsi_ctrl_pdata *lge_extra)
 {
 	int rc = 0;
 
-	lge_ctrl_pdata->parse_dt_blmaps = lge_mdss_panel_parse_dt_blmaps_joan;
-	lge_ctrl_pdata->parse_dt_panel_ctrl = lge_mdss_panel_parse_dt_panel_ctrl_joan;
-	lge_ctrl_pdata->create_panel_sysfs = lge_mdss_panel_create_panel_sysfs_joan;
+	lge_extra->parse_dt_blmaps = lge_mdss_panel_parse_dt_blmaps_joan;
+	lge_extra->parse_dt_panel_ctrl = lge_mdss_panel_parse_dt_panel_ctrl_joan;
+	lge_extra->create_panel_sysfs = lge_mdss_panel_create_panel_sysfs_joan;
 
 	return rc;
 }

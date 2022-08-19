@@ -19,7 +19,7 @@
 / {
 	model = "Qualcomm Technologies, Inc. MSM8998 v2.1 MTP";
 	compatible = "qcom,msm8998-mtp", "qcom,msm8998", "qcom,mtp";
-	qcom,board-id = <0x708 0>;
+	qcom,board-id = <0x408 0>;
 };
 
 &mdss_dsi0 {
@@ -75,7 +75,7 @@
     };
 };
 
-&smb1381_charger {
+&pmi8998_charger {
 	lge,smb-bat-en-gpio = <&pm8998_gpios 21 0>;
 };
 

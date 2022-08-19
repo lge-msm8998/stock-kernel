@@ -1,7 +1,7 @@
 
-#include "tfa_service.h"
-#include "tfa98xx_tfafieldnames.h"
-#include "config.h"
+#include "inc/tfa_service.h"
+#include "inc/tfa98xx_tfafieldnames.h"
+#include "inc/config.h"
 
 /* support for error code translation into text */
 static char latest_errorstr[64];

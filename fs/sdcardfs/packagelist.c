@@ -667,7 +667,6 @@ static struct config_item *extension_details_make_item(struct config_group *grou
 		return ERR_PTR(-ENOMEM);
 	}
 	qstr_init(&extension_details->name, tmp);
-
 #ifdef CONFIG_MACH_LGE
 	if (!extensions_value) { // WBT 201799
 		kfree(extension_details);

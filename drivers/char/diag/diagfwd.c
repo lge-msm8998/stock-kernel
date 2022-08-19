@@ -25,6 +25,9 @@
 #include <linux/kmemleak.h>
 #ifdef CONFIG_DIAG_OVER_USB
 #include <linux/usb/usbdiag.h>
+#ifdef CONFIG_LGE_USB
+#include <linux/input/qpnp-power-on.h>
+#endif
 #endif
 #include <soc/qcom/socinfo.h>
 #include <soc/qcom/restart.h>
@@ -545,7 +548,6 @@ void diag_update_sleeping_process_atd(int data_type)
 		if (!strcmp(driver->client_map[i].name, "atd")) {
 			pr_debug("%s: process atd found\n", __func__);
 			driver->data_ready[i] |= data_type;
-			atomic_inc(&driver->data_ready_notif[i]);
 			break;
 		}
 	wake_up_interruptible(&driver->wait_q);
@@ -1060,6 +1062,7 @@ int diag_process_apps_pkt(unsigned char *buf, int len, int pid)
 			if (MD_PERIPHERAL_MASK(reg_item->proc) & p_mask)
 				write_len = diag_send_data(reg_item, buf, len);
 		} else {
+
 			mutex_unlock(&driver->md_session_lock);
 /* [LGE_S][BSP_Modem] LGSSL to support testmode cmd */
 #ifdef CONFIG_LGE_DM_APP
@@ -1072,6 +1075,7 @@ int diag_process_apps_pkt(unsigned char *buf, int len, int pid)
 			{
 #endif
 /* [LGE_E][BSP_Modem] LGSSL to support testmode cmd */
+
 			if (MD_PERIPHERAL_MASK(reg_item->proc) &
 				driver->logging_mask) {
 				mutex_unlock(&driver->cmd_reg_mutex);
@@ -1138,6 +1142,10 @@ int diag_process_apps_pkt(unsigned char *buf, int len, int pid)
 		diag_send_rsp(driver->apps_rsp_buf, 1, pid);
 		msleep(5000);
 		/* call download API */
+#ifdef CONFIG_LGE_USB
+		qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_LAF_DLOAD_MODE);
+#endif
 		msm_set_restart_mode(RESTART_DLOAD);
 		printk(KERN_CRIT "diag: download mode set, Rebooting SoC..\n");
 		kernel_restart(NULL);

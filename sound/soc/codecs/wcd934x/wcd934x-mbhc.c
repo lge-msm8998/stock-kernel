@@ -481,7 +481,7 @@ static inline void tavil_mbhc_get_result_params(struct wcd9xxx *wcd9xxx,
 	};
 
 	regmap_update_bits(wcd9xxx->regmap, WCD934X_ANA_MBHC_ZDET, 0x20, 0x20);
-#ifdef CONFIG_MACH_MSM8998_JOAN
+#if defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 	usleep_range(5000, 5050);
 #endif
 	for (i = 0; i < TAVIL_ZDET_NUM_MEASUREMENTS; i++) {
@@ -604,7 +604,7 @@ static void tavil_wcd_mbhc_calc_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 	int zMono, z_diff1, z_diff2;
 	bool is_fsm_disable = false;
 
-#ifdef CONFIG_MACH_MSM8998_JOAN
+#if defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 	struct tavil_mbhc_zdet_param zdet_param[] = {
 		{4, 0, 4, 0x08, 0x14, 0x18}, /* < 32ohm */
 		{2, 0, 3, 0x18, 0x7C, 0x90}, /* 32ohm < Z < 400ohm */
@@ -632,7 +632,7 @@ static void tavil_wcd_mbhc_calc_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 
 	WCD_MBHC_RSC_ASSERT_LOCKED(mbhc);
 
-#ifdef CONFIG_MACH_MSM8998_JOAN
+#if defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 	if(snd_soc_read(codec, WCD934X_ANA_HPH) & 0xC0)
 	{
 	  pr_err("[LGE MBHC]  WCD934X_ANA_HPH reset!\n");
@@ -663,13 +663,13 @@ static void tavil_wcd_mbhc_calc_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 			   WCD934X_ANA_MBHC_MECH, 0x01, 0x00);
 
 	/* First get impedance on Left */
-#ifdef CONFIG_MACH_MSM8998_JOAN
+#if defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 	d1 = d1_a[0];
 	zdet_param_ptr = &zdet_param[4];
 #else /* QCT Original */
     d1 = d1_a[1];
 	zdet_param_ptr = &zdet_param[1];
-#endif  /* CONFIG_MACH_MSM8998_JOAN */
+#endif  /* CONFIG_MACH_MSM8998_JOAN || (CONFIG_MACH_MSM8998_PHOENIX  */
 	tavil_mbhc_zdet_ramp(codec, zdet_param_ptr, &z1L, NULL, d1);
 
 	if (!TAVIL_MBHC_IS_SECOND_RAMP_REQUIRED(z1L))

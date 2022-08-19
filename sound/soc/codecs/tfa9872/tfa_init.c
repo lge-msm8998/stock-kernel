@@ -14,11 +14,11 @@
  *limitations under the License.
  */
  
-#include "tfa_dsp_fw.h"
-#include "tfa_service.h"
-#include "tfa_internal.h"
+#include "inc/tfa_dsp_fw.h"
+#include "inc/tfa_service.h"
+#include "inc/tfa_internal.h"
 
-#include "tfa98xx_tfafieldnames.h"
+#include "inc/tfa98xx_tfafieldnames.h"
 
 static enum tfa98xx_error tfa9895_specific(tfa98xx_handle_t handle)
 {

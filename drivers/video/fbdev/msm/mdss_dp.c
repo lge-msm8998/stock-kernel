@@ -1567,22 +1567,11 @@ static int mdss_dp_setup_main_link(struct mdss_dp_drv_pdata *dp, bool train)
 
 	pr_debug("enter\n");
 	mdss_dp_mainlink_ctrl(&dp->ctrl_io, true);
-#if defined(CONFIG_LGE_DISPLAY_COMMON)
-	/* commit : 04e88e68e, owner : yoonsin.woo */
-	if (dp->psm_enabled) {
-		ret = mdss_dp_aux_send_psm_request(dp, false);
-		if (ret) {
-			pr_err("Failed to exit low power mode, rc=%d\n", ret);
-			goto end;
-		}
-	}
-#else
 	ret = mdss_dp_aux_send_psm_request(dp, false);
 	if (ret) {
 		pr_err("Failed to exit low power mode, rc=%d\n", ret);
 		goto end;
 	}
-#endif
 
 	reinit_completion(&dp->video_comp);
 
@@ -1636,19 +1625,10 @@ static int mdss_dp_on_irq(struct mdss_dp_drv_pdata *dp_drv, bool lt_needed)
 	connected = dp_drv->cable_connected;
 	mutex_unlock(&dp_drv->attention_lock);
 
-#if defined(CONFIG_LGE_DISPLAY_COMMON)
-	/* commit : bb66b9a15 , owner : yoonsin.woo */
-	/* In case of handling HPD_IRQ, there can be a corner case where
-	 * the sink is turned off or the DP cable is disconnected.
-	 * Avoid turning on DP path in such cases.
-	 */
-	if (!connected || !dp_drv->alt_mode.dp_status.hpd_high) {
-#else
 	/*
 	 * If DP cable disconnected, Avoid link training or turning on DP Path
 	 */
 	if (!connected) {
-#endif
 		pr_err("DP sink not connected\n");
 		return -EINVAL;
 	}
@@ -1694,12 +1674,7 @@ static int mdss_dp_on_irq(struct mdss_dp_drv_pdata *dp_drv, bool lt_needed)
 
 		ret = mdss_dp_setup_main_link(dp_drv, lt_needed);
 		if (ret) {
-#if defined(CONFIG_LGE_DISPLAY_COMMON)
-			/* commit : bb66b9a15 , owner : yoonsin.woo */
-			if (ret == -ENODEV) {
-#else
 			if (ret == -ENODEV || ret == -EINVAL) {
-#endif
 				pr_err("main link setup failed\n");
 				mutex_unlock(&dp_drv->train_mutex);
 				return ret;
@@ -2438,6 +2413,12 @@ static int mdss_dp_notify_clients(struct mdss_dp_drv_pdata *dp,
 				mdss_dp_state_ctrl(&dp->ctrl_io, ST_PUSH_IDLE);
 
 			/*
+			 * Just in case if NOTIFY_DISCONNECT_IRQ_HPD is timedout
+			 */
+			if (dp->power_on)
+				mdss_dp_state_ctrl(&dp->ctrl_io, ST_PUSH_IDLE);
+
+			/*
 			 * user modules already turned off. Need to explicitly
 			 * turn off DP core here.
 			 */
@@ -2488,11 +2469,6 @@ notify:
 		goto end;
 	}
 #endif
-	if (connect && !dp->cable_connected) {
-		pr_warn("invalid reqeust] connected=%d, %s\n", dp->cable_connected,
-				mdss_dp_notification_status_to_string(status));
-		goto invalid_request;
-	}
 
 #if defined(CONFIG_LGE_DISPLAY_DISPLAYPORT_EXTERNAL_BLOCK)
 	if (connect) {
@@ -3302,57 +3278,37 @@ static DEVICE_ATTR(frame_crc, S_IRUGO | S_IWUSR, mdss_dp_rda_frame_crc,
 static DEVICE_ATTR(hdcp_feature, S_IRUGO | S_IWUSR, mdss_dp_rda_hdcp_feature,
 	mdss_dp_wta_hdcp_feature);
 
-#if !defined(CONFIG_LGE_DISPLAY_DISPLAYPORT_EXTERNAL_BLOCK)
-static ssize_t mdss_dp_wta_external_block(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	pr_info("not supported\n");
-	return 0;
-}
-#else
+#if defined(CONFIG_LGE_DISPLAY_DISPLAYPORT_EXTERNAL_BLOCK)
 static ssize_t mdss_dp_wta_external_block(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct mdss_dp_drv_pdata *dp = mdss_dp_get_drvdata(dev);
-	int rc = 0;
-	int block = -1;
 
 	if (!dp) {
 		pr_err("invalid data\n");
 		return -EINVAL;
 	}
 
-	rc = kstrtoint(buf, 2, &block);
-	if (rc) {
-		pr_err("kstrtoint failed, ret=%d\n", rc);
-		return rc;
-	}
-	block = !!block;
-
-	if (!dp->cable_connected || dp->dp_adaptor != DP_ADAPTOR_PROPRIETARY_STABLE) {
-		dp->blk_state = block;
-		pr_err("invalid request (%d, %d)\n", dp->cable_connected, dp->dp_adaptor);
-		return -EINVAL;
-	}
-
-	if (block && !dp->blk_state) {
+	if (!strncmp(buf, "block", strlen("block")) && !dp->blk_state) {
 		pr_info("external off, block state : %d\n", dp->blk_state);
 		atomic_set(&dp->notification_pending, 1);
-		mdss_dp_send_audio_notification(dp, false);
+		mdss_dp_send_disconnect_notification(dp, false);
 		dp->blk_state = true;
-	} else if (!block && dp->blk_state) {
+	} else if (!strncmp(buf, "unblock", strlen("unblock")) && dp->blk_state) {
 		if (dp->hpd && dp->cable_connected) {
 			pr_info("external on, block state : %d\n", dp->blk_state);
 			atomic_set(&dp->notification_pending, 1);
-			mdss_dp_send_audio_notification(dp, true);
+			if (!dp->dp_initialized)
+				mdss_dp_host_init(&dp->panel_data);
+			mdss_dp_send_video_notification(dp, true);
 		}
 		dp->blk_state = false;
 	}
 
 	return count;
 }
-#endif
 static DEVICE_ATTR(dp_external_block, S_IWUSR, NULL, mdss_dp_wta_external_block);
+#endif
 
 static struct attribute *mdss_dp_fs_attrs[] = {
 	&dev_attr_connected.attr,
@@ -3362,7 +3318,9 @@ static struct attribute *mdss_dp_fs_attrs[] = {
 	&dev_attr_config.attr,
 	&dev_attr_frame_crc.attr,
 	&dev_attr_hdcp_feature.attr,
+#if defined(CONFIG_LGE_DISPLAY_DISPLAYPORT_EXTERNAL_BLOCK)
 	&dev_attr_dp_external_block.attr,
+#endif
 	NULL,
 };
 

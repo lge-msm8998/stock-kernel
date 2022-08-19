@@ -37,11 +37,6 @@ extern "C" {
 extern fci_u32 fic_user_data;
 extern fci_u32 msc_user_data;
 
-#ifndef FEATURE_GET_FIC_POLLING
-extern fci_u8 *fic_buf;
-#endif
-extern fci_u8 *msc_buf;
-
 extern fci_s32 (*fic_callback)(fci_u32 userdata, fci_u8 *data, fci_s32 length);
 extern fci_s32 (*msc_callback)(fci_u32 userdata, fci_u8 subch_id, fci_u8 *data, fci_s32 length);
 extern void fc8080_isr(HANDLE handle);

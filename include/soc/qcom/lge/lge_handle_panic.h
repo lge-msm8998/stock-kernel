@@ -64,7 +64,7 @@ struct panic_handler_data {
 	unsigned long	fb_size;
 };
 
-void lge_gen_key_panic(int key);
+void lge_gen_key_panic(int key, int status);
 #ifdef CONFIG_QCOM_DLOAD_MODE
 extern int lge_get_download_mode(void);
 #else

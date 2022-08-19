@@ -77,7 +77,7 @@
 
 #define MSM_HIFI_ON 1
 
-#ifdef CONFIG_MACH_MSM8998_JOAN
+#if defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 #define CONFIG_USE_3RD_SPKR_AMP
 #endif
 
@@ -5147,7 +5147,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 		.name = MSM_DAILINK_NAME(Media2),
 		.stream_name = "MultiMedia2",
 		.cpu_dai_name = "MultiMedia2",
-#ifdef CONFIG_MACH_MSM8998_JOAN
+#if defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 		.platform_name = "msm-pcm-dsp.3",
 #else
 		.platform_name = "msm-pcm-dsp.0",
@@ -6979,7 +6979,7 @@ static struct snd_soc_dai_link msm_lge_dai_links[] = {
 		.name = "Dual Audio",
 		.stream_name = "Dual audio",
 		.cpu_dai_name = "MultiMedia2",
-#ifdef CONFIG_MACH_MSM8998_JOAN
+#if defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 		.platform_name = "msm-pcm-dsp.3",
 #else
 		.platform_name = "msm-pcm-dsp.0",

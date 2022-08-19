@@ -32,9 +32,6 @@
 #include <linux/delay.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
-#ifdef CONFIG_MACH_LGE
-#include "../core/mmc_ops.h"
-#endif
 #include <linux/mmc/slot-gpio.h>
 #include <linux/dma-mapping.h>
 #include <linux/iopoll.h>

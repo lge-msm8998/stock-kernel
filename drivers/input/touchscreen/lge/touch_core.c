@@ -25,6 +25,9 @@
 #include <linux/delay.h>
 #include <linux/irq.h>
 #include <linux/input/lge_touch_notify.h>
+#include <linux/ktime.h>
+#include <linux/device.h>
+#include <linux/pm_wakeup.h>
 
 /*
  *  Include to touch core Header File
@@ -39,6 +42,15 @@ u32 touch_debug_mask = BASE_INFO;
 module_param_named(debug_mask, touch_debug_mask, int, S_IRUGO|S_IWUSR|S_IWGRP);
 
 static void touch_send_uevent(struct touch_core_data *ts, int type);
+
+#if defined(CONFIG_LGE_TOUCH_CORE_QCT)
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_RECOVERY_ESD) || IS_ENABLED(CONFIG_LGE_TOUCH_PANEL_GLOBAL_RESET)
+extern void lge_mdss_report_panel_dead(void);
+#endif
+#endif
+#if defined(CONFIG_LGE_TOUCH_CORE_MTK)
+extern void mtkfb_esd_recovery(void);
+#endif
 
 static void touch_report_cancel_event(struct touch_core_data *ts)
 {
@@ -181,7 +193,7 @@ irqreturn_t touch_irq_handler(int irq, void *dev_id)
 		TOUCH_I("interrupt in suspend[%d]\n",
 				atomic_read(&ts->state.pm));
 		atomic_set(&ts->state.pm, DEV_PM_SUSPEND_IRQ);
-		wake_lock_timeout(&ts->lpwg_wake_lock, msecs_to_jiffies(1000));
+		pm_wakeup_event(ts->dev, 1000);
 		return IRQ_HANDLED;
     }
 	return IRQ_WAKE_THREAD;
@@ -231,8 +243,13 @@ irqreturn_t touch_irq_thread(int irq, void *dev_id)
 			ts->driver->power(ts->dev, POWER_ON);
 			touch_msleep(ts->caps.hw_reset_delay);
 			mod_delayed_work(ts->wq, &ts->init_work, 0);
-		}
-		if (ret == -EUPGRADE) {
+		} else if (ret == -EGLOBALRESET) {
+			queue_delayed_work(ts->wq, &ts->panel_reset_work, 0);
+		} else if (ret == -EHWRESET) {
+			ts->driver->power(ts->dev, POWER_HW_RESET);
+		} else if (ret == -ESWRESET) {
+			ts->driver->power(ts->dev, POWER_SW_RESET);
+		} else if (ret == -EUPGRADE) {
 			ts->force_fwup = 1;
 			queue_delayed_work(ts->wq, &ts->upgrade_work, 0);
 		}
@@ -312,6 +329,22 @@ static void touch_fb_work_func(struct work_struct *fb_work)
 		touch_resume(ts->dev);
 }
 
+static void touch_panel_reset_work_func(struct work_struct *panel_reset_work)
+{
+	TOUCH_I("Request panel reset !!!\n");
+
+#if defined(CONFIG_LGE_TOUCH_CORE_QCT)
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_RECOVERY_ESD) || IS_ENABLED(CONFIG_LGE_TOUCH_PANEL_GLOBAL_RESET)
+	lge_mdss_report_panel_dead();
+#endif
+#endif
+
+#if defined(CONFIG_LGE_TOUCH_CORE_MTK)
+	mtkfb_esd_recovery();
+#endif
+
+}
+
 static int touch_check_driver_function(struct touch_core_data *ts)
 {
 	if (ts->driver->probe &&
@@ -352,7 +385,7 @@ static int touch_init_platform_data(struct touch_core_data *ts)
 static void touch_init_locks(struct touch_core_data *ts)
 {
 	mutex_init(&ts->lock);
-	wake_lock_init(&ts->lpwg_wake_lock, WAKE_LOCK_SUSPEND, "touch_lpwg");
+	device_init_wakeup(ts->dev, true);
 }
 
 static int touch_init_input(struct touch_core_data *ts)
@@ -490,6 +523,34 @@ static int touch_init_pm(struct touch_core_data *ts)
 	register_early_suspend(&ts->early_suspend);
 	return 0;
 }
+#elif defined(CONFIG_DRM) && defined(CONFIG_FB)
+static int touch_drm_notifier_callback(struct notifier_block *self,
+		unsigned long event, void *data)
+{
+	struct touch_core_data *ts =
+		container_of(self, struct touch_core_data, drm_notif);
+	struct msm_drm_notifier *ev = (struct msm_drm_notifier *)data;
+
+	if (ev && ev->data && event == MSM_DRM_EVENT_BLANK) {
+		int *blank = (int *)ev->data;
+
+		if (*blank == MSM_DRM_BLANK_UNBLANK)
+			touch_resume(ts->dev);
+		else if(*blank == MSM_DRM_BLANK_POWERDOWN)
+			touch_suspend(ts->dev);
+	}
+
+	return 0;
+}
+
+static int touch_init_pm(struct touch_core_data *ts)
+{
+	TOUCH_TRACE();
+
+	ts->drm_notif.notifier_call = touch_drm_notifier_callback;
+	return msm_drm_register_client(&ts->drm_notif);
+}
+
 #elif defined(CONFIG_FB)
 static int touch_fb_notifier_callback(struct notifier_block *self,
 		unsigned long event, void *data)
@@ -560,7 +621,7 @@ static void touch_send_uevent(struct touch_core_data *ts, int type)
 	TOUCH_TRACE();
 	if (atomic_read(&ts->state.uevent) == UEVENT_IDLE ||
 			touch_boot_mode_check(ts->dev) != NORMAL_BOOT) {
-		wake_lock_timeout(&ts->lpwg_wake_lock, msecs_to_jiffies(3000));
+		pm_wakeup_event(ts->dev, 3000);
 		atomic_set(&ts->state.uevent, UEVENT_BUSY);
 		kobject_uevent_env(&device_uevent_touch.kobj,
 				KOBJ_CHANGE, uevent_str[type]);
@@ -602,10 +663,6 @@ static int touch_notify(struct touch_core_data *ts,
 		switch (event) {
 		case NOTIFY_TOUCH_RESET:
 			ret = ts->driver->notify(ts->dev, event, data);
-			if (ret != NOTIFY_STOP) {
-				touch_interrupt_control(ts->dev,
-				INTERRUPT_DISABLE);
-			}
 			break;
 
 		case NOTIFY_CONNECTION:
@@ -644,6 +701,61 @@ static int touch_notify(struct touch_core_data *ts,
 			touch_resume(ts->dev);
 		ret = 0;
 	}
+	return ret;
+}
+
+static int display_notify(struct touch_core_data *ts,
+				   unsigned long event, void *data)
+{
+	int ret = 0;
+	u32 display_notify_data = 0;
+	struct lge_panel_notifier *panel_data = data;
+
+	if (touch_boot_mode() == TOUCH_CHARGER_MODE)
+		return 0;
+
+	if (ts->driver->notify) {
+		mutex_lock(&ts->lock);
+		switch (event) {
+		case LGE_PANEL_EVENT_BLANK:
+			TOUCH_I("EVENT_BLANK : %d %d\n", panel_data->display_id,
+					panel_data->state);
+			if (panel_data->state == LGE_PANEL_STATE_UNBLANK)
+				display_notify_data = 3;
+			else if (panel_data->state == LGE_PANEL_STATE_BLANK)
+				display_notify_data = 0;
+			else
+				display_notify_data = panel_data->state;
+			ret = ts->driver->notify(ts->dev, LCD_EVENT_LCD_MODE,
+					&display_notify_data);
+			break;
+		case LGE_PANEL_EVENT_RESET:
+			TOUCH_I("EVENT_RESET : %d %d\n", panel_data->display_id,
+					panel_data->state);
+			//if (panel_data->state == LGE_PANEL_RESET_HIGH)
+				ret = ts->driver->notify(ts->dev, NOTIFY_TOUCH_RESET, data);
+			break;
+		case LGE_PANEL_EVENT_POWER:
+			TOUCH_D(TRACE, "EVENT_POWER : %d %d", panel_data->display_id,
+					panel_data->state);
+			break;
+		case LGE_PANEL_EVENT_RECOVERY:
+			TOUCH_D(TRACE, "EVENT_RECOVERY : %d %d", panel_data->display_id,
+					panel_data->state);
+			if (panel_data->state == LGE_PANEL_RECOVERY_DEAD) {
+				TOUCH_I("%s: Panel Recovery !!\n", __func__);
+				touch_interrupt_control(ts->dev, INTERRUPT_DISABLE);
+			}
+			break;
+		default:
+			TOUCH_D(TRACE, "unknwon type : %ld %d %d\n", event,
+					panel_data->display_id,
+					panel_data->state);
+			break;
+		}
+		mutex_unlock(&ts->lock);
+	}
+
 	return ret;
 }
 
@@ -701,9 +813,17 @@ static int touch_atomic_notifier_callback(struct notifier_block *this,
 	return 0;
 }
 
+static int display_notifier_callback(struct notifier_block *this,
+				   unsigned long event, void *data)
+{
+	struct touch_core_data *ts =
+		container_of(this, struct touch_core_data, display_notif);
+	return display_notify(ts, event, data);
+}
+
 static int touch_init_notify(struct touch_core_data *ts)
 {
-	int ret;
+	int ret = 0;
 
 	ts->blocking_notif.notifier_call = touch_blocking_notifier_callback;
 	ret = touch_blocking_notifier_register(&ts->blocking_notif);
@@ -717,6 +837,13 @@ static int touch_init_notify(struct touch_core_data *ts)
 
 	if (ret < 0) {
 		TOUCH_E("failed to regiseter touch atomic_notify callback\n");
+	}
+
+	ts->display_notif.notifier_call = display_notifier_callback;
+	ret = lge_panel_notifier_register_client(&ts->display_notif);
+
+	if (ret < 0) {
+		TOUCH_E("failed to regiseter lge_panel_notify callback\n");
 	}
 
 	return ret;
@@ -735,6 +862,7 @@ static int touch_init_works(struct touch_core_data *ts)
 	INIT_DELAYED_WORK(&ts->upgrade_work, touch_upgrade_work_func);
 	INIT_DELAYED_WORK(&ts->notify_work, touch_atomic_notifer_work_func);
 	INIT_DELAYED_WORK(&ts->fb_work, touch_fb_work_func);
+	INIT_DELAYED_WORK(&ts->panel_reset_work, touch_panel_reset_work_func);
 
 	return 0;
 }
@@ -877,6 +1005,8 @@ static int touch_core_remove(struct platform_device *pdev)
 
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 	unregister_early_suspend(&ts->early_suspend);
+#elif defined(CONFIG_DRM) && defined(CONFIG_FB)
+        msm_drm_unregister_client(&ts->drm_notif);
 #elif defined(CONFIG_FB)
 	fb_unregister_client(&ts->fb_notif);
 #endif
@@ -886,7 +1016,7 @@ static int touch_core_remove(struct platform_device *pdev)
 	touch_atomic_notifier_unregister(&ts->atomic_notif);
 
 	destroy_workqueue(ts->wq);
-	wake_lock_destroy(&ts->lpwg_wake_lock);
+	device_init_wakeup(ts->dev, false);
 
 	touch_interrupt_control(ts->dev, INTERRUPT_DISABLE);
 	free_irq(ts->irq, ts);
@@ -915,6 +1045,7 @@ void touch_core_shutdown(struct platform_device *pdev)
 		return;
 
 	touch_interrupt_control(ts->dev, INTERRUPT_DISABLE);
+	free_irq(ts->irq, ts);
 
 	if (ts->driver->shutdown)
 		ts->driver->shutdown(ts->dev);

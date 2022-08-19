@@ -884,12 +884,6 @@ static int qusb_phy_set_suspend(struct usb_phy *phy, int suspend)
 
 			qusb_phy_enable_clocks(qphy, true);
 		}
-#ifdef CONFIG_LGE_USB_GADGET
-		if (qphy->phy.flags & PHY_HOST_MODE)
-			qusb_phy_tune_init_host(qphy);
-		else
-			qusb_phy_tune_init(qphy);
-#endif
 		qphy->suspended = false;
 	}
 
@@ -906,6 +900,12 @@ static int qusb_phy_notify_connect(struct usb_phy *phy,
 	if (qphy->qusb_phy_host_init_seq && qphy->phy.flags & PHY_HOST_MODE)
 		qusb_phy_host_init(phy);
 
+#ifdef CONFIG_LGE_USB_GADGET
+	if (qphy->phy.flags & PHY_HOST_MODE)
+		qusb_phy_tune_init_host(qphy);
+	else
+		qusb_phy_tune_init(qphy);
+#endif
 	dev_dbg(phy->dev, "QUSB PHY: connect notification cable_connected=%d\n",
 							qphy->cable_connected);
 	return 0;

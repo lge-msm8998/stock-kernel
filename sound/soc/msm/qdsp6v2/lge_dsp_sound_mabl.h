@@ -20,18 +20,30 @@
 
 
 struct asm_lgesoundmabl_param_devicespeaker {
+    struct apr_hdr  hdr;
+    struct asm_stream_cmd_set_pp_params_v2 param;
+    struct asm_stream_param_data_v2 data;
     int32_t                  DeviceSpeaker;
 } __packed;
 
 struct asm_lgesoundmabl_param_monoenable {
+    struct apr_hdr  hdr;
+    struct asm_stream_cmd_set_pp_params_v2 param;
+    struct asm_stream_param_data_v2 data;
     int32_t                  MonoEnable;
 } __packed;
 
 struct asm_lgesoundmabl_param_lrbalancecontrol {
+    struct apr_hdr  hdr;
+    struct asm_stream_cmd_set_pp_params_v2 param;
+    struct asm_stream_param_data_v2 data;
     int32_t                  LrBalanceControl;
 } __packed;
 
 struct asm_lgesoundmabl_param_allparam {
+	struct apr_hdr  hdr;
+	struct asm_stream_cmd_set_pp_params_v2 param;
+	struct asm_stream_param_data_v2 data;
     int32_t                  DeviceSpeaker;
     int32_t                  MonoEnable;
     int32_t                  LrBalanceControl;

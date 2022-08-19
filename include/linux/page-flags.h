@@ -112,6 +112,9 @@ enum pageflags {
 #ifdef CONFIG_ZCACHE
 	PG_was_active,
 #endif
+#ifdef CONFIG_ZRAM_ASYNC_IO
+	PG_async_wb,
+#endif
 	__NR_PAGEFLAGS,
 
 	/* Filesystems */
@@ -267,6 +270,9 @@ PAGEFLAG(Readahead, reclaim) TESTCLEARFLAG(Readahead, reclaim)
 #define PageHighMem(__p) is_highmem_idx(page_zonenum(__p))
 #else
 PAGEFLAG_FALSE(HighMem)
+#endif
+#ifdef CONFIG_ZRAM_ASYNC_IO
+PAGEFLAG(AsyncWriteback, async_wb) TESTCLEARFLAG(AsyncWriteback, async_wb)
 #endif
 
 #ifdef CONFIG_SWAP

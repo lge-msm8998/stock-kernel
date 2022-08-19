@@ -1495,15 +1495,16 @@ static int msm_pcm_add_compress_control(struct snd_soc_pcm_runtime *rtd)
 	pr_debug("%s: Registering new mixer ctl %s\n", __func__, mixer_str);
 	pdata = dev_get_drvdata(rtd->platform->dev);
 	if (pdata) {
-		if (!pdata->pcm)
+		if (!pdata->pcm) {
 			pdata->pcm = rtd->pcm;
-		ret = snd_soc_add_platform_controls(rtd->platform,
-						pcm_compress_control,
-						ARRAY_SIZE
-						(pcm_compress_control));
-		if (ret < 0)
-			pr_err("%s: failed add ctl %s. err = %d\n",
-				__func__, mixer_str, ret);
+			ret = snd_soc_add_platform_controls(rtd->platform,
+							pcm_compress_control,
+							ARRAY_SIZE
+							(pcm_compress_control));
+			if (ret < 0)
+				pr_err("%s: failed add ctl %s. err = %d\n",
+					__func__, mixer_str, ret);
+		}
 	} else {
 		pr_err("%s: NULL pdata\n", __func__);
 		ret = -EINVAL;

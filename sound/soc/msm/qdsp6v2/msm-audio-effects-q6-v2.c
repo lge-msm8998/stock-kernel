@@ -1135,7 +1135,7 @@ int msm_audio_effects_popless_eq_handler(struct audio_client *ac,
 			else
 				memset(eq_config_data, 0, config_param_length);
 			if (!eq_config_data)
-				goto invalid_config;
+				return -ENOMEM;
 			param_data = eq_config_data;
 			updt_config_data = (u32 *) eq_config_data;
 			*updt_config_data++ = eq->config.eq_pregain;
@@ -1235,10 +1235,8 @@ int msm_audio_effects_popless_eq_handler(struct audio_client *ac,
 	else
 		pr_debug("%s: did not send pp params\n", __func__);
 invalid_config:
-	if(params)
-		kfree(params);
-	if(eq_config_data)
-		kfree(eq_config_data);
+	kfree(params);
+	kfree(eq_config_data);
 	return rc;
 }
 

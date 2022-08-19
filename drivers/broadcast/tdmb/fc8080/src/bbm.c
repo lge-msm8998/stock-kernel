@@ -22,20 +22,13 @@
     History :
     ----------------------------------------------------------------------
 *******************************************************************************/
-#include <linux/input.h>
-#include <linux/spi/spi.h>
+
 #include "../inc/fci_types.h"
 #include "../inc/fci_tun.h"
 #include "../inc/fc8080_regs.h"
 #include "../inc/fc8080_bb.h"
-#include "../inc/fci_oal.h"
 #include "../inc/fci_hal.h"
 #include "../inc/fc8080_isr.h"
-
-#ifndef FEATURE_GET_FIC_POLLING
-#define FIC_BUF_SIZE            (6*1024)
-#endif
-#define MSC_BUF_SIZE            (6*1024)
 
 fci_s32 bbm_com_reset(HANDLE handle)
 {
@@ -327,18 +320,6 @@ fci_s32 bbm_com_fic_callback_register(fci_u32 userdata, fci_s32 (*callback)(fci_
 {
     fic_user_data = userdata;
     fic_callback = callback;
-#ifndef FEATURE_GET_FIC_POLLING
-    if(fic_buf == NULL) {
-        fic_buf = kmalloc(FIC_BUF_SIZE, GFP_DMA | GFP_KERNEL);
-        if(!fic_buf) {
-            printk("kmalloc of fic_buf failed\n");
-            return BBM_NOK;
-        } else {
-            printk("kmalloc of fic_buf : %p(%p) succeed\n", &fic_buf, fic_buf);
-            memset(fic_buf, 0x0, FIC_BUF_SIZE);
-        }
-    }
-#endif
 
     return BBM_OK;
 }
@@ -348,16 +329,7 @@ fci_s32 bbm_com_msc_callback_register(fci_u32 userdata, fci_s32 (*callback)(fci_
 {
     msc_user_data = userdata;
     msc_callback = callback;
-    if(msc_buf == NULL) {
-        msc_buf = kmalloc(MSC_BUF_SIZE, GFP_DMA | GFP_KERNEL);
-        if(!msc_buf) {
-            printk("kmalloc of msc_buf failed\n");
-            return BBM_NOK;
-        } else {
-            printk("kmalloc of msc_buf : %p(%p) succeed\n", &msc_buf, msc_buf);
-            memset(msc_buf, 0x0, MSC_BUF_SIZE);
-        }
-    }
+
     return BBM_OK;
 }
 
@@ -365,12 +337,7 @@ fci_s32 bbm_com_fic_callback_deregister(HANDLE handle)
 {
     fic_user_data = 0;
     fic_callback = NULL;
-#ifndef FEATURE_GET_FIC_POLLING
-    if(fic_buf)
-    {
-         kfree(fic_buf);
-    }
-#endif
+
     return BBM_OK;
 }
 
@@ -378,9 +345,6 @@ fci_s32 bbm_com_msc_callback_deregister(HANDLE handle)
 {
     msc_user_data = 0;
     msc_callback = NULL;
-    if(msc_buf)
-    {
-         kfree(msc_buf);
-    }
+
     return BBM_OK;
 }

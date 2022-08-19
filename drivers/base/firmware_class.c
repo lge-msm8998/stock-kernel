@@ -312,8 +312,7 @@ static const char * const fw_path[] = {
 	"/lib/firmware/updates",
 	"/lib/firmware/" UTS_RELEASE,
 	"/lib/firmware",
-	"/lib64/firmware",
-	"/firmware/image"
+	"/lib64/firmware"
 };
 
 /*
@@ -1114,7 +1113,7 @@ static int _request_firmware_load(struct firmware_priv *fw_priv,
 		timeout = MAX_JIFFY_OFFSET;
 	}
 
-	timeout = wait_for_completion_interruptible_timeout(&buf->completion,
+	timeout = wait_for_completion_killable_timeout(&buf->completion,
 			timeout);
 	if (timeout == -ERESTARTSYS || !timeout) {
 		retval = timeout;

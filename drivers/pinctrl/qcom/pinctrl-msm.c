@@ -468,7 +468,7 @@ static void msm_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
 #ifdef CONFIG_DEBUG_FS
 #include <linux/seq_file.h>
 
-#if defined(CONFIG_MACH_MSM8998_LUCY) || defined(CONFIG_MACH_MSM8998_JOAN)
+#if defined(CONFIG_MACH_MSM8998_LUCY) || defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 /*
    gpio81 ~ 84 can be controlled only by TZ
    Non-HLOS/trustzone/core/buses/qup_accesscontrol/honeybadger/config/QUPAC_8998_Access.xml
@@ -501,7 +501,7 @@ static void msm_gpio_dbg_show_one(struct seq_file *s,
 	int drive;
 	int pull;
 	u32 ctl_reg;
-#if defined(CONFIG_MACH_MSM8998_LUCY) || defined(CONFIG_MACH_MSM8998_JOAN)
+#if defined(CONFIG_MACH_MSM8998_LUCY) || defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 	u32 val = 0;
 #endif
 
@@ -523,7 +523,7 @@ static void msm_gpio_dbg_show_one(struct seq_file *s,
 	seq_printf(s, " %-8s: %-3s %d", g->name, is_out ? "out" : "in", func);
 	seq_printf(s, " %dmA", msm_regval_to_drive(drive));
 	seq_printf(s, " %s", pulls[pull]);
-#if defined(CONFIG_MACH_MSM8998_LUCY) || defined(CONFIG_MACH_MSM8998_JOAN)
+#if defined(CONFIG_MACH_MSM8998_LUCY) || defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 	if (!strncmp(g->name, "gpio", 4) && is_out) {
 		val = readl(pctrl->regs + g->io_reg);
 		val &= BIT(g->out_bit);
@@ -538,13 +538,13 @@ static void msm_gpio_dbg_show(struct seq_file *s, struct gpio_chip *chip)
 	unsigned i;
 
 	for (i = 0; i < chip->ngpio; i++, gpio++) {
-#if defined(CONFIG_MACH_MSM8998_LUCY) || defined(CONFIG_MACH_MSM8998_JOAN)
+#if defined(CONFIG_MACH_MSM8998_LUCY) || defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 		if(msm_gpio_check_access(gpio) == true)
 		{
 #endif
 			msm_gpio_dbg_show_one(s, NULL, chip, i, gpio);
 			seq_puts(s, "\n");
-#if defined(CONFIG_MACH_MSM8998_LUCY) || defined(CONFIG_MACH_MSM8998_JOAN)
+#if defined(CONFIG_MACH_MSM8998_LUCY) || defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 		}
 #endif
 	}

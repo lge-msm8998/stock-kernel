@@ -20,26 +20,9 @@
 #include "lge_mdss_dsi.h"
 
 int lge_br_to_bl(struct msm_fb_data_type *mfd, int br_lvl);
-#if defined(CONFIG_LGE_DISPLAY_AMBIENT_SUPPORTED)
-int lge_br_to_bl_ex(struct msm_fb_data_type *mfd, int br_lvl);
-void mdss_fb_update_backlight_ex(struct msm_fb_data_type *mfd);
-#endif
-#if defined(CONFIG_LGE_SP_MIRRORING_CTRL_BL)
-int lge_is_bl_update_blocked(int bl_lvl);
-void lge_set_bl_update_blocked(bool enable);
-#endif
 #ifdef CONFIG_LGE_LCD_OFF_DIMMING
 void lge_set_blank_called(void);
 #endif
 void lge_mdss_fb_init(struct msm_fb_data_type *mfd);
-void lge_mdss_fb_remove_sysfs(struct msm_fb_data_type *mfd);
-int lge_mdss_fb_create_sysfs(struct msm_fb_data_type *mfd);
-#if defined(CONFIG_LGE_DISPLAY_AMBIENT_SUPPORTED)
-void lge_ambient_brightness_register(struct msm_fb_data_type *mfd);
-void lge_ambient_brightness_unregister(void);
-#endif
-#if defined(CONFIG_LGE_DISPLAY_DYNAMIC_RESOLUTION_SWITCH)
-void mdss_fb_drs_notify(struct kobject *kobj, int state);
-#endif
-
+void lge_boost_brightness(struct msm_fb_data_type *mfd, int value);
 #endif /* LGE_MDSS_FB_H */

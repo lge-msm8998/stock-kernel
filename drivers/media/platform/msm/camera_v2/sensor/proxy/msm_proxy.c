@@ -2288,6 +2288,8 @@ int msm_init_proxy_EwokAPI(void)
 	{ // forced x-talk cal
 #if defined(CONFIG_MACH_MSM8996_ELSA) || defined(CONFIG_MACH_MSM8996_ANNA)
 	XTalkCompMegaCps = 8; // glass window
+#elif defined (CONFIG_MACH_MSM8998_PHOENIX)
+	XTalkCompMegaCps = 16; /* LGE_CHANGE, Change the XTalkCompMegaCps for PHOENIX, 2018-07-05, yonghwan.lym@lge.com */
 #else
 	XTalkCompMegaCps = 24;
 #endif

@@ -1176,6 +1176,17 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			case PAGE_ACTIVATE:
 				goto activate_locked;
 			case PAGE_SUCCESS:
+#ifdef CONFIG_ZRAM_ASYNC_IO
+				/*
+				 * pageout() returns page with writeback flags
+				 * during CONFIG_ZRAM_ASYNC_IO feature on.
+				 * So should make compensate nr_reclaimed.
+				 */
+				if (PageAsyncWriteback(page) && PageWriteback(page)) {
+					nr_reclaimed++;
+					ClearPageAsyncWriteback(page);
+				}
+#endif
 				if (PageWriteback(page))
 					goto keep;
 				if (PageDirty(page))
@@ -1563,6 +1574,33 @@ int isolate_lru_page(struct page *page)
 	}
 	return ret;
 }
+
+#ifdef CONFIG_PROCESS_RECLAIM
+int isolate_evictable_lru_page(struct page *page)
+{
+	int ret = -EBUSY;
+
+	VM_BUG_ON_PAGE(!page_count(page), page);
+	WARN_RATELIMIT(PageTail(page), "trying to isolate tail page");
+
+	if (PageLRU(page)) {
+		struct zone *zone = page_zone(page);
+		struct lruvec *lruvec;
+
+		spin_lock_irq(&zone->lru_lock);
+		lruvec = mem_cgroup_page_lruvec(page, zone);
+		if (PageLRU(page) && !PageUnevictable(page)) {
+			int lru = page_lru(page);
+			get_page(page);
+			ClearPageLRU(page);
+			del_page_from_lru_list(page, lruvec, lru);
+			ret = 0;
+		}
+		spin_unlock_irq(&zone->lru_lock);
+	}
+	return ret;
+}
+#endif
 
 static int __too_many_isolated(struct zone *zone, int file,
 	struct scan_control *sc, int safe)

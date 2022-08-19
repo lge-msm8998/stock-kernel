@@ -545,7 +545,7 @@ int tunerbb_drv_fc8300_Get_SignalInfo(struct fc8300Status_t *st, s32 brd_type)
 {
     u8 ovr;
     s32 res;
-    u8 tmcc_data[26] = {0, };
+    u8 tmcc_data[26];
     u8 tmcc_done = 0;
     s32 rssi;
     u8 mode;

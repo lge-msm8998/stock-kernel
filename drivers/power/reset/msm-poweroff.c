@@ -36,7 +36,6 @@
 #include <soc/qcom/minidump.h>
 
 #ifdef CONFIG_LGE_HANDLE_PANIC
-#include <linux/qcom/diag_dload.h>
 #include <soc/qcom/lge/lge_handle_panic.h>
 #endif
 
@@ -81,9 +80,6 @@ static struct kobject dload_kobj;
 #ifdef CONFIG_RANDOMIZE_BASE
 #define KASLR_OFFSET_PROP "qcom,msm-imem-kaslr_offset"
 #endif
-#ifdef CONFIG_LGE_HANDLE_PANIC
-#define LGE_DL_MODE_PROP "qcom,msm-imem-diag-dload"
-#endif
 
 static int in_panic;
 static int dload_type = SCM_DLOAD_FULLDUMP;
@@ -94,9 +90,6 @@ static void *dload_mode_addr, *dload_type_addr;
 static bool dload_mode_enabled;
 #ifndef CONFIG_LGE_HANDLE_PANIC
 static void *emergency_dload_mode_addr;
-#endif
-#ifdef CONFIG_LGE_HANDLE_PANIC
-static struct dload_struct __iomem *diag_dload;
 #endif
 
 #ifdef CONFIG_RANDOMIZE_BASE
@@ -373,26 +366,16 @@ static void msm_restart_prepare(const char *cmd)
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_KEYS_CLEAR);
 			__raw_writel(0x7766550a, restart_reason);
-#if defined(CONFIG_LGE_LCD_OFF_DIMMING)
-		} else if (!strncmp(cmd, "FOTA LCD off", 12)) {
-			qpnp_pon_set_restart_reason(
-				PON_RESTART_REASON_FOTA_LCD_OFF);
-			__raw_writel(0x77665560, restart_reason);
-		} else if (!strncmp(cmd, "FOTA OUT LCD off", 16)) {
-			qpnp_pon_set_restart_reason(
-				PON_RESTART_REASON_FOTA_OUT_LCD_OFF);
-			__raw_writel(0x77665561, restart_reason);
-		} else if (!strncmp(cmd, "LCD off", 7)) {
-			qpnp_pon_set_restart_reason(
-				PON_RESTART_REASON_LCD_OFF);
-			__raw_writel(0x77665562, restart_reason);
-#endif
 #ifdef CONFIG_LGE_PM
 		} else if (!strncmp(cmd, "charge_reset", 12)) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_CHARGE_RESET);
 			__raw_writel(0x776655a0, restart_reason);
 #endif
+		} else if (!strncmp(cmd, "opid mismatched", 15)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_OPID_MISMATCHED);
+			__raw_writel(0x77665563, restart_reason);
 		} else if (!strncmp(cmd, "oem-", 4)) {
 			unsigned long code;
 			unsigned long reset_reason;
@@ -417,6 +400,11 @@ static void msm_restart_prepare(const char *cmd)
 				__raw_writel(0x6f656d00 | (code & 0xff),
 					     restart_reason);
 			}
+#ifdef CONFIG_LGE_PM_SHIP_MODE
+			if (!ret && code == 0x11)
+				qpnp_pon_set_restart_reason(
+					PON_RESTART_REASON_SHIP_MODE);
+#endif
 #ifndef CONFIG_LGE_HANDLE_PANIC
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
@@ -438,8 +426,11 @@ static void msm_restart_prepare(const char *cmd)
 	}
 #ifdef CONFIG_LGE_HANDLE_PANIC
 	else {
-		qpnp_pon_set_restart_reason(
-			PON_RESTART_REASON_NORMAL);
+		if (restart_mode == RESTART_DLOAD)
+			set_dload_mode(0);
+		else
+			qpnp_pon_set_restart_reason(
+					PON_RESTART_REASON_NORMAL);
 	}
 #endif
 
@@ -450,20 +441,6 @@ static void msm_restart_prepare(const char *cmd)
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
 	}
 #ifdef CONFIG_LGE_HANDLE_PANIC
-	if (restart_mode == RESTART_DLOAD) {
-		set_dload_mode(0);
-		if (diag_dload->pid == 0x633E || diag_dload->pid == 0x62CE) {
-			qpnp_pon_set_restart_reason(
-					PON_RESTART_REASON_LAF_DLOAD_MTP);
-		} else if (diag_dload->pid == 0x62C4 || diag_dload->pid == 0x6344) {
-			qpnp_pon_set_restart_reason(
-					PON_RESTART_REASON_LAF_DLOAD_TETHER);
-		} else {
-			qpnp_pon_set_restart_reason(
-					PON_RESTART_REASON_LAF_DLOAD_MODE);
-		}
-	}
-
 	if (in_panic)
 		lge_set_panic_reason();
 #endif
@@ -728,16 +705,6 @@ static int msm_restart_probe(struct platform_device *pdev)
 			pr_err("unable to map imem EDLOAD mode offset\n");
 	}
 #endif
-#ifdef CONFIG_LGE_HANDLE_PANIC
-	np = of_find_compatible_node(NULL, NULL, LGE_DL_MODE_PROP);
-	if (!np) {
-		pr_err("unable to find DT imem LGE DLOAD mode node\n");
-	} else {
-		diag_dload = of_iomap(np, 0);
-		if (!diag_dload)
-			pr_err("unable to map imem LGE DLOAD mode offset\n");
-	}
-#endif
 
 #ifdef CONFIG_RANDOMIZE_BASE
 #define KASLR_OFFSET_BIT_MASK	0x00000000FFFFFFFF
@@ -841,9 +808,6 @@ skip_sysfs_create:
 	return 0;
 
 err_restart_reason:
-#ifdef CONFIG_LGE_HANDLE_PANIC
-	iounmap(diag_dload);
-#endif
 #ifndef CONFIG_LGE_HANDLE_PANIC
 #ifdef CONFIG_QCOM_DLOAD_MODE
 	iounmap(emergency_dload_mode_addr);

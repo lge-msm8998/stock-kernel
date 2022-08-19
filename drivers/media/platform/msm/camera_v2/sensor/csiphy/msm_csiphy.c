@@ -68,10 +68,12 @@ void csiphy_timer_callback(unsigned long data)
 	if(atomic_read(&csiphy_dev->csiphy_timer.used)) {
 		pr_err("%s: timed out-csiphy(%p) sof_debug(%d)\n", __func__,
 			csiphy_dev, csiphy_dev->csiphy_sof_debug);
+#if 0 // LGE_CHANGE, disable debug irq because of kernel crash, dongjin.ha
 		if (csiphy_dev->csiphy_sof_debug == SOF_DEBUG_ENABLE) {
 			disable_irq(csiphy_dev->irq->start);
 			csiphy_dev->csiphy_sof_debug = SOF_DEBUG_DISABLE;
 		}
+#endif
 		atomic_set(&csiphy_dev->csiphy_timer.used, 0);
 		del_timer(&csiphy_dev->csiphy_timer.timer);
 	}

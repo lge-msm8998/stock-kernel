@@ -781,10 +781,6 @@ struct ufs_hba {
 	struct device_attribute spm_lvl_attr;
 	int pm_op_in_progress;
 
-#ifdef CONFIG_UFSDBG_SYSFS_COMMON
-	struct device_attribute health_desc_attr;
-#endif
-
 	struct ufshcd_lrb *lrb;
 	unsigned long lrb_in_use;
 

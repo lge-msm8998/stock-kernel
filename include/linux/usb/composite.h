@@ -535,6 +535,7 @@ struct usb_composite_dev {
 	unsigned			os_desc_pending:1;
 #ifdef CONFIG_LGE_USB_GADGET_MULTI_CONFIG
 	unsigned			is_mac_os:1;
+	unsigned			disable_multi_config:1;
 #endif
 };
 

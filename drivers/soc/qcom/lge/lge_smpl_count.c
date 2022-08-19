@@ -32,7 +32,6 @@
 #define PWR_ON_EVENT_RTC              0x04
 #define PWR_ON_EVENT_SMPL             0x02
 #define PWR_ON_EVENT_HARD_RESET       0x01
-#define PWR_OFF_EVENT_S2_RESET        5
 #define PWR_OFF_EVENT_S3_RESET        39
 
 static int dummy_arg;
@@ -70,14 +69,8 @@ static int read_smpl_count(char *buffer, const struct kernel_param *kp)
 		pr_err("lge_smpl_count_data is NULL\n");
 		return -1;
 	}
-#ifdef CONFIG_MACH_MSM8998_JOAN_VZW
-	if ((warm_reset == 0)
-			&& ((poff_sts == PWR_OFF_EVENT_S3_RESET)
-			|| (poff_sts == PWR_OFF_EVENT_S2_RESET)
-			|| (boot_cause &= PWR_ON_EVENT_SMPL))) {
-#else
-	if ((boot_cause &= PWR_ON_EVENT_SMPL) && (warm_reset == 0)) {
-#endif
+	if (((poff_sts == PWR_OFF_EVENT_S3_RESET) || (boot_cause &= PWR_ON_EVENT_SMPL))
+			&& (warm_reset == 0)) {
 		pr_info("[SMPL_CNT] ===> is smpl boot\n");
 		data->smpl_boot = 1;
 	} else {

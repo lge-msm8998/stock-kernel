@@ -23,7 +23,6 @@
 #include "wlan_hdd_trace.h"
 #include "wlan_hdd_ioctl.h"
 #include "wlan_hdd_power.h"
-#include "wlan_hdd_request_manager.h"
 #include "wlan_hdd_driver_ops.h"
 #include "cds_concurrency.h"
 #include "wlan_hdd_hostapd.h"
@@ -2319,10 +2318,9 @@ static int hdd_set_dwell_time(hdd_adapter_t *adapter, uint8_t *command)
 	sme_get_config_param(hHal, sme_config);
 
 	if (strncmp(command, "SETDWELLTIME ACTIVE MAX", 23) == 0) {
-		if (drv_cmd_validate(command, 23)) {
-			retval = -EINVAL;
-			goto free;
-		}
+		if (drv_cmd_validate(command, 23))
+			return -EINVAL;
+
 		value = value + 24;
 		temp = kstrtou32(value, 10, &val);
 		if (temp != 0 || val < CFG_ACTIVE_MAX_CHANNEL_TIME_MIN ||
@@ -2335,10 +2333,8 @@ static int hdd_set_dwell_time(hdd_adapter_t *adapter, uint8_t *command)
 		sme_config->csrConfig.nActiveMaxChnTime = val;
 		sme_update_config(hHal, sme_config);
 	} else if (strncmp(command, "SETDWELLTIME ACTIVE MIN", 23) == 0) {
-		if (drv_cmd_validate(command, 23)) {
-			retval = -EINVAL;
-			goto free;
-		}
+		if (drv_cmd_validate(command, 23))
+			return -EINVAL;
 
 		value = value + 24;
 		temp = kstrtou32(value, 10, &val);
@@ -2352,10 +2348,8 @@ static int hdd_set_dwell_time(hdd_adapter_t *adapter, uint8_t *command)
 		sme_config->csrConfig.nActiveMinChnTime = val;
 		sme_update_config(hHal, sme_config);
 	} else if (strncmp(command, "SETDWELLTIME PASSIVE MAX", 24) == 0) {
-		if (drv_cmd_validate(command, 24)) {
-			retval = -EINVAL;
-			goto free;
-		}
+		if (drv_cmd_validate(command, 24))
+			return -EINVAL;
 
 		value = value + 25;
 		temp = kstrtou32(value, 10, &val);
@@ -2369,10 +2363,8 @@ static int hdd_set_dwell_time(hdd_adapter_t *adapter, uint8_t *command)
 		sme_config->csrConfig.nPassiveMaxChnTime = val;
 		sme_update_config(hHal, sme_config);
 	} else if (strncmp(command, "SETDWELLTIME PASSIVE MIN", 24) == 0) {
-		if (drv_cmd_validate(command, 24)) {
-			retval = -EINVAL;
-			goto free;
-		}
+		if (drv_cmd_validate(command, 24))
+			return -EINVAL;
 
 		value = value + 25;
 		temp = kstrtou32(value, 10, &val);
@@ -2386,10 +2378,8 @@ static int hdd_set_dwell_time(hdd_adapter_t *adapter, uint8_t *command)
 		sme_config->csrConfig.nPassiveMinChnTime = val;
 		sme_update_config(hHal, sme_config);
 	} else if (strncmp(command, "SETDWELLTIME", 12) == 0) {
-		if (drv_cmd_validate(command, 12)) {
-			retval = -EINVAL;
-			goto free;
-		}
+		if (drv_cmd_validate(command, 12))
+			return -EINVAL;
 
 		value = value + 13;
 		temp = kstrtou32(value, 10, &val);
@@ -2537,25 +2527,46 @@ sme_config_free:
 }
 #endif
 
-struct link_status_priv {
-	uint8_t link_status;
-};
-
 static void hdd_get_link_status_cb(uint8_t status, void *context)
 {
-	struct hdd_request *request;
-	struct link_status_priv *priv;
+	struct statsContext *pLinkContext;
+	hdd_adapter_t *adapter;
 
-	request = hdd_request_get(context);
-	if (!request) {
-		hdd_err("Obsolete request");
+	if (NULL == context) {
+		hdd_err("Bad context [%pK]", context);
 		return;
 	}
 
-	priv = hdd_request_priv(request);
-	priv->link_status = status;
-	hdd_request_complete(request);
-	hdd_request_put(request);
+	pLinkContext = context;
+	adapter = pLinkContext->pAdapter;
+
+	spin_lock(&hdd_context_lock);
+
+	if ((NULL == adapter) ||
+	    (LINK_STATUS_MAGIC != pLinkContext->magic)) {
+		/*
+		 * the caller presumably timed out so there is
+		 * nothing we can do
+		 */
+		spin_unlock(&hdd_context_lock);
+		hdd_warn("Invalid context, adapter [%pK] magic [%08x]",
+			  adapter, pLinkContext->magic);
+		return;
+	}
+
+	/* context is valid so caller is still waiting */
+
+	/* paranoia: invalidate the magic */
+	pLinkContext->magic = 0;
+
+	/* copy over the status */
+	adapter->linkStatus = status;
+
+	/* notify the caller */
+	complete(&pLinkContext->completion);
+
+	/* serialization is complete */
+	spin_unlock(&hdd_context_lock);
 }
 
 /**
@@ -2575,15 +2586,9 @@ static int wlan_hdd_get_link_status(hdd_adapter_t *adapter)
 
 	hdd_station_ctx_t *pHddStaCtx =
 				WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	static struct statsContext context;
 	QDF_STATUS hstatus;
-	int ret;
-	void *cookie;
-	struct hdd_request *request;
-	struct link_status_priv *priv;
-	static const struct hdd_request_params params = {
-		.priv_size = sizeof(*priv),
-		.timeout_ms = WLAN_WAIT_TIME_LINK_STATUS,
-	};
+	unsigned long rc;
 
 	if (cds_is_driver_recovering() || cds_is_driver_in_bad_state()) {
 		hdd_warn("Recovery in Progress. State: 0x%x Ignore!!!",
@@ -2608,38 +2613,26 @@ static int wlan_hdd_get_link_status(hdd_adapter_t *adapter)
 		return 0;
 	}
 
-	request = hdd_request_alloc(&params);
-	if (!request) {
-		hdd_err("Request allocation failure");
-		return 0;
-	}
-	cookie = hdd_request_cookie(request);
-
+	init_completion(&context.completion);
+	context.pAdapter = adapter;
+	context.magic = LINK_STATUS_MAGIC;
 	hstatus = sme_get_link_status(WLAN_HDD_GET_HAL_CTX(adapter),
 				      hdd_get_link_status_cb,
-				      cookie, adapter->sessionId);
+				      &context, adapter->sessionId);
 	if (QDF_STATUS_SUCCESS != hstatus) {
 		hdd_err("Unable to retrieve link status");
 		/* return a cached value */
 	} else {
 		/* request is sent -- wait for the response */
-		ret = hdd_request_wait_for_response(request);
-		if (ret) {
+		rc = wait_for_completion_timeout(&context.completion,
+				msecs_to_jiffies(WLAN_WAIT_TIME_LINK_STATUS));
+		if (!rc)
 			hdd_err("SME timed out while retrieving link status");
-			/* return a cached value */
-		} else {
-			/* update the adapter with the fresh results */
-			priv = hdd_request_priv(request);
-			adapter->linkStatus = priv->link_status;
-		}
 	}
 
-	/*
-	 * either we never sent a request, we sent a request and
-	 * received a response or we sent a request and timed out.
-	 * regardless we are done with the request.
-	 */
-	hdd_request_put(request);
+	spin_lock(&hdd_context_lock);
+	context.magic = 0;
+	spin_unlock(&hdd_context_lock);
 
 	/* either callback updated adapter stats or it has cached data */
 	return adapter->linkStatus;
@@ -3145,10 +3138,9 @@ static int drv_cmd_country(hdd_adapter_t *adapter,
 {
 	int ret = 0;
 	QDF_STATUS status;
+	unsigned long rc;
 	char *country_code;
-#ifndef FEATURE_SUPPORT_LGE
 	int32_t cc_from_db;
-#endif
 
 	country_code = strnchr(command, strlen(command), ' ');
 	/* no argument after the command*/
@@ -3170,19 +3162,19 @@ static int drv_cmd_country(hdd_adapter_t *adapter,
 	if (*country_code == '\0' || *(country_code + 1) == '\0')
 		return -EINVAL;
 
-#ifndef FEATURE_SUPPORT_LGE
 	if (!((country_code[0] == 'X' && country_code[1] == 'X') ||
 	    (country_code[0] == '0' && country_code[1] == '0'))) {
 		cc_from_db = cds_get_country_from_alpha2(country_code);
+#ifndef FEATURE_SUPPORT_LGE
 		if (cc_from_db == CTRY_DEFAULT) {
 			hdd_err("Invalid country code: %c%c",
 				country_code[0], country_code[1]);
 			return -EINVAL;
 		}
-	}
 #endif
+	}
 
-	qdf_event_reset(&adapter->change_country_code);
+	INIT_COMPLETION(adapter->change_country_code);
 
 	status = sme_change_country_code(hdd_ctx->hHal,
 			wlan_hdd_change_country_code_callback,
@@ -3191,14 +3183,12 @@ static int drv_cmd_country(hdd_adapter_t *adapter,
 			hdd_ctx->pcds_context,
 			true,
 			true);
-	if (QDF_IS_STATUS_SUCCESS(status)) {
-		status = qdf_wait_for_event_completion(
-					&adapter->change_country_code,
-					WLAN_WAIT_TIME_COUNTRY);
-		if (QDF_IS_STATUS_ERROR(status)) {
+	if (status == QDF_STATUS_SUCCESS) {
+		rc = wait_for_completion_timeout(
+			&adapter->change_country_code,
+			 msecs_to_jiffies(WLAN_WAIT_TIME_COUNTRY));
+		if (!rc)
 			hdd_err("SME while setting country code timed out");
-			ret = -ETIMEDOUT;
-		}
 	} else {
 		hdd_err("SME Change Country code fail, status %d",
 			 status);
@@ -6895,7 +6885,7 @@ extern void wlan_hdd_set_scan_suppress(unsigned long on_off);
 /*LGE_CHNAGE_S, DRIVER scan_suppress command, 2017-06-12, moon-wifi@lge.com*/
 static int drv_cmd_set_scansuppress(hdd_adapter_t *adapter,
 			 hdd_context_t *hdd_ctx,
-			 uint8_t *command,
+             uint8_t *command,
 			 uint8_t command_len,
 			 hdd_priv_data_t *priv_data)
 {
@@ -6923,41 +6913,6 @@ static int drv_cmd_set_scansuppress(hdd_adapter_t *adapter,
 
 	wlan_hdd_set_scan_suppress(on_off);
 	return 0;
-}
-static int drv_cmd_get_dbsmode(hdd_adapter_t *adapter,
-			 hdd_context_t *hdd_ctx,
-			 uint8_t *command,
-			 uint8_t command_len,
-			 hdd_priv_data_t *priv_data)
-{
-	char extra[32] = {'\0',};
-	int ret = -1;
-	uint8_t len = 0;
-	int ant_no = 0;
-	int rsdb_mode = 0;
-	hdd_adapter_t *pAdapter = adapter;
-	tSmeConfigParams smeConfig ;
-	tHalHandle hHal;
-	hHal= WLAN_HDD_GET_HAL_CTX(pAdapter);
-	hdd_ctx = WLAN_HDD_GET_CTX(pAdapter);
-	ret = wlan_hdd_validate_context(hdd_ctx);
-
-	if (0 != ret) {
-	    hdd_err("[LGE_COMMAND]%s>Error in getting context", __func__);
-		return -EINVAL;
-	}
-	sme_get_config_param(hHal, &smeConfig);
-	ant_no = (smeConfig.csrConfig.enable2x2 == 0) ? 1 : 2;
-	if ((ant_no == 2) && wma_is_current_hwmode_dbs()) {
-	    hdd_err("[LGE_COMMAND]wma_is_current_hwmode_dbs is true");
-		rsdb_mode = 1;
-	}
-	len = scnprintf(extra, sizeof(extra), "%s %d", command, rsdb_mode);
-	if (copy_to_user(priv_data->buf, &extra, len)) {
-		hdd_err("Failed to copy data to user buffer");
-		return -EFAULT;
-	}
-    return 0;
 }
 /*LGE_CHNAGE_E, DRIVER scan_suppress command, 2017-06-12, moon-wifi@lge.com*/
 #endif
@@ -7644,10 +7599,9 @@ static const struct hdd_drv_cmd hdd_drv_cmds[] = {
 	{"BTCOEXSCAN-START",          drv_cmd_dummy, false},
 	{"BTCOEXSCAN-STOP",           drv_cmd_dummy, false},
 #ifdef FEATURE_SUPPORT_LGE
-/*LGE_CHNAGE_S, DRIVER scan_suppress command,DRIVER GET_RSDBMODE 2019-01-17, protocol-wifi@lge.com*/
-	{"SET_SCANSUPPRESS",          drv_cmd_set_scansuppress, true}, //true or false??
-	{"GET_RSDBMODE",              drv_cmd_get_dbsmode, false}, //fasle
-/*LGE_CHNAGE_E, DRIVER scan_suppress command,DRIVER GET_RSDBMODE 2019-01-17, protocol-wifi@lge.com*/
+/*LGE_CHNAGE_S, DRIVER scan_suppress command, 2017-06-12, moon-wifi@lge.com*/
+	{"SET_SCANSUPPRESS",          drv_cmd_set_scansuppress},
+/*LGE_CHNAGE_E, DRIVER scan_suppress command, 2017-06-12, moon-wifi@lge.com*/
 #endif
 };
 

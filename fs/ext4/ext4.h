@@ -2336,8 +2336,6 @@ void ext4_free_encryption_info(struct inode *inode, struct ext4_crypt_info *ci);
 #ifdef CONFIG_EXT4_FS_ENCRYPTION
 int ext4_has_encryption_key(struct inode *inode);
 
-int ext4_get_encryption_info(struct inode *inode);
-
 static inline struct ext4_crypt_info *ext4_encryption_info(struct inode *inode)
 {
 	return EXT4_I(inode)->i_crypt_info;
@@ -2350,6 +2348,8 @@ static inline int ext4_using_hardware_encryption(struct inode *inode)
 	return S_ISREG(inode->i_mode) && ci &&
 		ci->ci_data_mode == EXT4_ENCRYPTION_MODE_PRIVATE;
 }
+
+int ext4_get_encryption_info(struct inode *inode);
 
 #else
 static inline int ext4_has_encryption_key(struct inode *inode)
@@ -3057,9 +3057,6 @@ extern struct buffer_head *ext4_get_first_inline_block(struct inode *inode,
 extern int ext4_inline_data_fiemap(struct inode *inode,
 				   struct fiemap_extent_info *fieinfo,
 				   int *has_inline, __u64 start, __u64 len);
-extern int ext4_try_to_evict_inline_data(handle_t *handle,
-					 struct inode *inode,
-					 int needed);
 extern void ext4_inline_data_truncate(struct inode *inode, int *has_inline);
 
 extern int ext4_convert_inline_data(struct inode *inode);

@@ -80,6 +80,3 @@ obj-y				+= l3mdev/
 endif
 obj-$(CONFIG_IPC_ROUTER)	+= ipc_router/
 obj-$(CONFIG_RMNET_DATA) += rmnet_data/
-
-#This API is only for checking patch code ID.
-obj-y                       += patchcodeid.o

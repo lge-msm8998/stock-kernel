@@ -193,8 +193,13 @@ int touch_bus_read(struct device *dev, struct touch_bus_msg *msg)
 
 	if (ts->bus_type == HWIF_I2C)
 		ret = touch_i2c_read(to_i2c_client(dev), msg);
-	else if (ts->bus_type == HWIF_SPI)
+	else if (ts->bus_type == HWIF_SPI) {
+		if (atomic_read(&ts->state.pm) >= DEV_PM_SUSPEND) {
+			TOUCH_E("bus_read when pm_suspend");
+			return -EDEADLK;
+		}
 		ret = touch_spi_read(to_spi_device(dev), msg);
+	}
 
 	return ret;
 }
@@ -206,8 +211,13 @@ int touch_bus_write(struct device *dev, struct touch_bus_msg *msg)
 
 	if (ts->bus_type == HWIF_I2C)
 		ret = touch_i2c_write(to_i2c_client(dev), msg);
-	else if (ts->bus_type == HWIF_SPI)
+	else if (ts->bus_type == HWIF_SPI) {
+		if (atomic_read(&ts->state.pm) >= DEV_PM_SUSPEND) {
+			TOUCH_E("bus_write when pm_suspend");
+			return -EDEADLK;
+		}
 		ret = touch_spi_write(to_spi_device(dev), msg);
+	}
 
 	return ret;
 }
@@ -332,12 +342,37 @@ int touch_boot_mode_check(struct device *dev)
 	return ret;
 }
 
+#if defined(CONFIG_LGE_TOUCH_LGSIC_SW49408) || defined(CONFIG_LGE_TOUCH_LGSIC_SW49409) || defined(CONFIG_LGE_TOUCH_LGSIC_SW49410)
+
+//extern bool is_ddic_name(char *ddic_name);
+#endif
+
 enum touch_device_type touch_get_device_type(void)
 {
-	enum touch_device_type ret = TYPE_SW49408;
-#if defined(CONFIG_LGE_MIPI_LUCY_INCELL_QHD_CMD_PANEL) || defined(CONFIG_LGE_MIPI_JOAN_ONCELL_QHD_CMD_PANEL)
-	ret = lge_get_panel();
+	enum touch_device_type ret = TYPE_DUMMY;
+
+#if defined(CONFIG_LGE_TOUCH_SYNAPTICS_S3707)
+	ret = TYPE_S3707;
 #endif
+
+#if defined(CONFIG_LGE_TOUCH_STM_FTM4)
+	ret = TYPE_FTM4;
+#endif
+#if 0
+#if defined(CONFIG_LGE_TOUCH_LGSIC_SW49408) || defined(CONFIG_LGE_TOUCH_LGSIC_SW49409) || defined(CONFIG_LGE_TOUCH_LGSIC_SW49410)
+
+	if (is_ddic_name("sw49408"))
+		ret = TYPE_SW49408;
+	else if (is_ddic_name("sw49409"))
+		ret = TYPE_SW49409;
+	else if (is_ddic_name("sw49410") || is_ddic_name("sw49410_rev1"))
+		ret = TYPE_SW49410;
+#endif
+#endif
+#if defined(CONFIG_LGE_PANEL_MAKER_ID_SUPPORT)
+	ret = lge_get_panel_maker_id();
+#endif
+
 	TOUCH_I("%s = [%d]\n", __func__, ret);
 
 	return ret;

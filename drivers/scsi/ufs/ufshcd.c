@@ -50,10 +50,6 @@
 #include "ufs-debugfs.h"
 #include "ufs-qcom.h"
 
-#ifdef CONFIG_MACH_LGE
-#include "ufsdbg-print.h"
-#endif
-
 #define CREATE_TRACE_POINTS
 #include <trace/events/ufs.h>
 
@@ -741,14 +737,8 @@ static void ufshcd_print_uic_err_hist(struct ufs_hba *hba,
 
 		if (err_hist->reg[p] == 0)
 			continue;
-
-#ifdef CONFIG_MACH_LGE
-		print_ufs_error_spec(hba, err_name, err_hist->reg[p],
-			ktime_to_us(err_hist->tstamp[p]), i);
-#else
 		dev_err(hba->dev, "%s[%d] = 0x%x at %lld us", err_name, i,
 			err_hist->reg[p], ktime_to_us(err_hist->tstamp[p]));
-#endif
 	}
 }
 
@@ -2855,17 +2845,6 @@ static int ufshcd_compose_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 		if (likely(lrbp->cmd)) {
 			ret = ufshcd_prepare_req_desc_hdr(hba, lrbp,
 				&upiu_flags, lrbp->cmd->sc_data_direction);
-
-#ifdef CONFIG_LGE_IOSCHED_EXTENSION
-			if (hba->dev_quirks & UFS_DEVICE_QUIRK_CMD_ORDERED) {
-				if ( (lrbp->cmd->request->cmd_flags & REQ_WRITE) &&
-					 (lrbp->cmd->request->bio) &&
-					 (lrbp->cmd->request->bio->bi_excontrol & REQ_EX_ORDERED) ) {
-					upiu_flags |= UPIU_TASK_ATTR_ORDERED;
-				}
-			}
-#endif
-
 			ufshcd_prepare_utp_scsi_cmd_upiu(lrbp, upiu_flags);
 		} else {
 			ret = -EINVAL;
@@ -4453,6 +4432,27 @@ int ufshcd_wait_for_doorbell_clr(struct ufs_hba *hba, u64 wait_timeout_us)
 		dev_err(hba->dev,
 			"%s: timedout waiting for doorbell to clear (tm=0x%x, tr=0x%x)\n",
 			__func__, tm_doorbell, tr_doorbell);
+#ifdef CONFIG_MACH_LGE
+		if(hweight32(tr_doorbell) >= 16)
+		{
+			hba->ufshcd_state = UFSHCD_STATE_RESET;
+			ufshcd_set_eh_in_progress(hba);
+
+			spin_unlock_irqrestore(hba->host->host_lock, flags);
+			ufshcd_release_all(hba);
+			up_write(&hba->lock);
+			ufshcd_scsi_unblock_requests(hba);
+
+			ufshcd_reset_and_restore(hba);
+
+			ufshcd_scsi_block_requests(hba);
+			down_write(&hba->lock);
+			ufshcd_hold_all(hba);
+			spin_lock_irqsave(hba->host->host_lock, flags);
+
+			ufshcd_clear_eh_in_progress(hba);
+		}
+#endif
 		ret = -EBUSY;
 	}
 out:
@@ -6428,17 +6428,13 @@ static irqreturn_t ufshcd_update_uic_error(struct ufs_hba *hba)
 						__func__, reg);
 					hba->full_init_linereset = true;
 				}
-#ifdef CONFIG_MACH_LGE
-                else{
-                  dev_err(hba->dev, "%s: LINERESET during cmd=0x%x, reg 0x%x\n",__func__, cmd->command, reg);
-                }
-#endif
+				else {
+					dev_err(hba->dev, "%s: LINERESET during hibern8 enter with cmd!=UIC_CMD_DME_HIBER_ENTER, reg 0x%x\n",__func__, reg);
+				}
 			}
-#ifdef CONFIG_MACH_LGE
-            else{
-              dev_err(hba->dev, "%s: LINERESET during cmd=NULL, reg 0x%x\n", __func__, reg);
-            }
-#endif
+			else {
+				dev_err(hba->dev, "%s: LINERESET during hibern8 enter with no_cmd, reg 0x%x\n", __func__, reg);
+			}
 			if (!hba->full_init_linereset)
 				schedule_work(&hba->rls_work);
 		}
@@ -7077,10 +7073,6 @@ static int ufshcd_reset_and_restore(struct ufs_hba *hba)
 	int err = 0;
 	unsigned long flags;
 	int retries = MAX_HOST_RESET_RETRIES;
-
-#ifdef CONFIG_MACH_LGE
-	dev_err(hba->dev, "%s: [LGE] start reset to restore host and device\n", __func__);
-#endif
 
 	do {
 		err = ufshcd_vops_full_reset(hba);
@@ -9293,51 +9285,6 @@ static ssize_t ufshcd_spm_lvl_store(struct device *dev,
 	return ufshcd_pm_lvl_store(dev, attr, buf, count, false);
 }
 
-#ifdef CONFIG_UFSDBG_SYSFS_COMMON
-static ssize_t ufsdbg_health_desc_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	int err = 0;
-	struct ufs_hba *hba = dev_get_drvdata(dev);
-	int curr_len = 0;
-	int buff_len = QUERY_DESC_DEVICE_HEALTH_MAX_SIZE;
-	u8 desc_buf[QUERY_DESC_DEVICE_HEALTH_MAX_SIZE];
-
-	pm_runtime_get_sync(hba->dev);
-	err = ufshcd_read_health_desc(hba, desc_buf, buff_len);
-	pm_runtime_put_sync(hba->dev);
-
-	if (!err) {
-		curr_len = sprintf(buf, "bLength %d bDescriptorIDN %d bPreEOLInfo %d bDeviceLifeTimeEstA %d bDeviceLifeTimeEstB %d\n",
-			desc_buf[0], desc_buf[1], desc_buf[2], desc_buf[3], desc_buf[4]);
-	}
-
-	return curr_len;
-}
-
-static ssize_t ufsdbg_health_desc_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	return 0;
-}
-
-static void ufsdbg_add_health_desc_sysfs_node(struct ufs_hba *hba)
-{
-	hba->health_desc_attr.show = ufsdbg_health_desc_show;
-	hba->health_desc_attr.store = ufsdbg_health_desc_store;
-	sysfs_attr_init(&hba->health_desc_attr.attr);
-	hba->health_desc_attr.attr.name = "health_desc";
-	hba->health_desc_attr.attr.mode = S_IRUGO;
-	if (device_create_file(hba->dev, &hba->health_desc_attr))
-		dev_err(hba->dev, "Failed to create sysfs for health_desc_attr\n");
-}
-
-static void ufsdbg_add_sysfs_nodes(struct ufs_hba *hba)
-{
-	ufsdbg_add_health_desc_sysfs_node(hba);
-}
-#endif
-
 static void ufshcd_add_spm_lvl_sysfs_nodes(struct ufs_hba *hba)
 {
 	hba->spm_lvl_attr.show = ufshcd_spm_lvl_show;
@@ -10027,41 +9974,6 @@ static void ufshcd_init_lanes_per_dir(struct ufs_hba *hba)
 		hba->lanes_per_direction = UFSHCD_DEFAULT_LANES_PER_DIRECTION;
 	}
 }
-
-#ifdef CONFIG_UFSDBG_SYSFS_COMMON
-#include <linux/proc_fs.h>
-static struct proc_dir_entry*	procfs_root;
-
-bool ufsdbg_procfs_create(struct ufs_hba* hba)
-{
-	#define UFSDBG_PROCFS_ROOT    "storage"	/* /proc/storage/ufs */
-	struct proc_dir_entry*	root;
-	char name[64];
-
-	if (!hba)
-		return false;
-
-	root = proc_mkdir(UFSDBG_PROCFS_ROOT, NULL);
-	if (NULL != root) {
-		sprintf(name, "/sys/devices/soc/%s", dev_name(hba->dev));
-		if (!proc_symlink("ufs", root, name)) {
-			return false;
-		}
-	}
-
-	procfs_root = root;
-	return true;
-}
-
-bool ufsdbg_procfs_destroy(struct ufs_hba* hba)
-{
-	if (procfs_root)
-		proc_remove(procfs_root);
-
-	return true;
-}
-#endif
-
 /**
  * ufshcd_init - Driver initialization routine
  * @hba: per-adapter instance
@@ -10135,10 +10047,6 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	host->unique_id = host->host_no;
 	host->max_cmd_len = MAX_CDB_SIZE;
 	host->set_dbd_for_caching = 1;
-
-#ifdef CONFIG_SCSI_DEVICE_IDENTIFIER
-	host->by_ufs = 1;
-#endif
 
 	hba->max_pwr_info.is_valid = false;
 
@@ -10262,11 +10170,6 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	ufsdbg_add_debugfs(hba);
 
 	ufshcd_add_sysfs_nodes(hba);
-
-#ifdef CONFIG_UFSDBG_SYSFS_COMMON
-	ufsdbg_add_sysfs_nodes(hba);
-	ufsdbg_procfs_create(hba);
-#endif
 
 	return 0;
 

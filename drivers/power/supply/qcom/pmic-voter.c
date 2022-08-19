@@ -20,12 +20,7 @@
 
 #include <linux/pmic-voter.h>
 
-#ifdef CONFIG_LGE_PM
-// LGE uses additional voters
-#define NUM_MAX_CLIENTS		24
-#else
 #define NUM_MAX_CLIENTS		16
-#endif
 #define DEBUG_FORCE_CLIENT	"DEBUG_FORCE_CLIENT"
 
 static DEFINE_SPINLOCK(votable_list_slock);
@@ -433,14 +428,7 @@ int vote(struct votable *votable, const char *client_str, bool enabled, int val)
 			|| (effective_result != votable->effective_result)) {
 		votable->effective_client_id = effective_id;
 		votable->effective_result = effective_result;
-#if defined(CONFIG_LGE_PM_DEBUG) && !defined(DEBUG)
-	/* Releasing logs for the effective voter except on "FG_WS" */
-	if (strcmp(votable->name, "FG_WS"))
-		pr_info(
-#else
-		pr_debug(
-#endif
-			"%s: effective vote is now %d voted by %s,%d\n",
+		pr_debug("%s: effective vote is now %d voted by %s,%d\n",
 			votable->name, effective_result,
 			get_client_str(votable, effective_id),
 			effective_id);

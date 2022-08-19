@@ -122,26 +122,26 @@ static void lge_set_sdev_name(struct wcd_mbhc *mbhc, int status)
 	normal_threshold = 3;       // normal type w/ DAC
 	pr_debug("%s: enter\n", __func__);
 
-    /*
-     * temporary code before applying tunning values of MBHC
-     */
-    if( (mbhc->zl == TASHA_ZDET_FLOATING_IMPEDANCE && mbhc->zr == TASHA_ZDET_FLOATING_IMPEDANCE) ||
-            (mbhc->zl == 0 && mbhc->zr == TASHA_ZDET_FLOATING_IMPEDANCE) ||
-                (mbhc->zl == TASHA_ZDET_FLOATING_IMPEDANCE && mbhc->zr == 0) ||
-                    (mbhc->zl == 0 && mbhc->zr == 0) ) {
-        pr_info("[LGE MBHC] one is floating, and the other one is 0, or both are floating or zero. it could be a Aux Cable(L:%d,R:%d)\n", mbhc->zl, mbhc->zr);
-        mbhc->zl = mbhc->zr = TASHA_ZDET_FLOATING_IMPEDANCE;
-    }else if( mbhc->zl == TASHA_ZDET_FLOATING_IMPEDANCE && mbhc->zr != TASHA_ZDET_FLOATING_IMPEDANCE ) {
-        pr_info("[LGE MBHC] L's imped is flaoting, so L's imped will be assigned with R's (%d)\n", mbhc->zr);
-        mbhc->zl = mbhc->zr;
-    } else if( mbhc->zl != TASHA_ZDET_FLOATING_IMPEDANCE && mbhc->zr == TASHA_ZDET_FLOATING_IMPEDANCE ) {
-        pr_info("[LGE MBHC] R's imped is flaoting, so R's imped will be assigned with L's (%d)\n", mbhc->zl);
-        mbhc->zr = mbhc->zl;
-    } else {
-        pr_info("[LGE MBHC] L's imped is %d, R's imped is %d\n", mbhc->zl, mbhc->zr);
-    }
+	/*
+	 * temporary code before applying tunning values of MBHC
+	 */
+	if( (mbhc->zl == TASHA_ZDET_FLOATING_IMPEDANCE && mbhc->zr == TASHA_ZDET_FLOATING_IMPEDANCE) ||
+			(mbhc->zl == 0 && mbhc->zr == TASHA_ZDET_FLOATING_IMPEDANCE) ||
+			(mbhc->zl == TASHA_ZDET_FLOATING_IMPEDANCE && mbhc->zr == 0) ||
+			(mbhc->zl == 0 && mbhc->zr == 0) ) {
+		pr_info("[LGE MBHC] one is floating, and the other one is 0, or both are floating or zero. it could be a Aux Cable(L:%d,R:%d)\n", mbhc->zl, mbhc->zr);
+		mbhc->zl = mbhc->zr = TASHA_ZDET_FLOATING_IMPEDANCE;
+	} else if( mbhc->zl == TASHA_ZDET_FLOATING_IMPEDANCE && mbhc->zr != TASHA_ZDET_FLOATING_IMPEDANCE ) {
+		pr_info("[LGE MBHC] L's imped is flaoting, so L's imped will be assigned with R's (%d)\n", mbhc->zr);
+		mbhc->zl = mbhc->zr;
+	} else if( mbhc->zl != TASHA_ZDET_FLOATING_IMPEDANCE && mbhc->zr == TASHA_ZDET_FLOATING_IMPEDANCE ) {
+		pr_info("[LGE MBHC] R's imped is flaoting, so R's imped will be assigned with L's (%d)\n", mbhc->zl);
+		mbhc->zr = mbhc->zl;
+	} else {
+		pr_info("[LGE MBHC] L's imped is %d, R's imped is %d\n", mbhc->zl, mbhc->zr);
+	}
 
-    if ((mbhc->mbhc_cfg->detect_extn_cable) && (status == SND_JACK_LINEOUT))
+	if ((mbhc->mbhc_cfg->detect_extn_cable) && (status == SND_JACK_LINEOUT))
 		mbhc->sdev.name = LGE_SWITCH_NAME_AUX_HIDDEN;
 	else if (((mbhc->zl > LGE_ADVANCED_HEADSET_THRESHOLD-advanced_threshold) &&
 		  (mbhc->zr > LGE_ADVANCED_HEADSET_THRESHOLD-advanced_threshold))
@@ -955,7 +955,7 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 		} else if (jack_type == SND_JACK_ANC_HEADPHONE)
 			mbhc->current_plug = MBHC_PLUG_TYPE_ANC_HEADPHONE;
 
-#ifdef CONFIG_MACH_MSM8998_JOAN
+#if defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX)
 		if (mbhc->mbhc_cb->hph_pa_on_status)
 			is_pa_on = mbhc->mbhc_cb->hph_pa_on_status(codec);
 
@@ -3334,7 +3334,7 @@ static const struct file_operations codec_debug_ops = {
 	.read = mbhc_debug_read
 };
 #endif
-#if defined(CONFIG_SND_SOC_ES9218P) && defined(CONFIG_MACH_MSM8998_JOAN)
+#if defined(CONFIG_SND_SOC_ES9218P) && (defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX))
 struct wcd_mbhc *ESSMbhc;
 static int force_set_clamper = 0;
 void wcd_set_clamp_on_mic(int value)
@@ -3505,7 +3505,7 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 		switch_dev_unregister(&mbhc->sdev);
 	}
 #endif
-#if defined(CONFIG_SND_SOC_ES9218P) && defined(CONFIG_MACH_MSM8998_JOAN)
+#if defined(CONFIG_SND_SOC_ES9218P) && (defined(CONFIG_MACH_MSM8998_JOAN) || defined(CONFIG_MACH_MSM8998_PHOENIX))
     ESSMbhc = mbhc;
 #endif /* CONFIG_SND_SOC_ES9218P */
 #ifdef CONFIG_DEBUG_FS

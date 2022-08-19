@@ -44,7 +44,7 @@ static struct alarm_base {
 	struct timerqueue_head	timerqueue;
 	ktime_t			(*gettime)(void);
 	clockid_t		base_clockid;
-} alarm_bases[ALARM_NUMTYPE];
+} alarm_bases[ALARM_NUMTYPE + 1];
 
 /* freezer delta & lock used to handle clock_nanosleep triggered wakeups */
 static ktime_t freezer_delta;

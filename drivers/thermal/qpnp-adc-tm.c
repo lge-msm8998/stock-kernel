@@ -2316,12 +2316,7 @@ static int qpnp_adc_tm_read_status(struct qpnp_adc_tm_chip *chip)
 		rc = qpnp_adc_tm_req_sts_check(chip);
 		if (rc) {
 			pr_err("adc-tm-tm req sts check failed with %d\n", rc);
-
-#ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
-			goto fail_adc_tm_sts;
-#else
 			goto fail;
-#endif
 		}
 	}
 
@@ -2358,9 +2353,7 @@ static int qpnp_adc_tm_read_status(struct qpnp_adc_tm_chip *chip)
 fail:
 #ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
 	spin_unlock_irqrestore(&chip->moisture_spin_lock, flags);
-fail_adc_tm_sts:
 #endif
-
 	mutex_unlock(&chip->adc->adc_lock);
 
 	if (rc < 0 || (!chip->th_info.adc_tm_high_enable &&

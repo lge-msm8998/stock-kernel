@@ -24,16 +24,19 @@
 #define LAST_UPDATE "17-07-21, 13M LGIT OLAF OIS bu24235"
 
 /*If changed FW, change below FW bin and Checksum information*/
-#define JOAN_0616_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_0_BIN_1 "bu24235_dl_program_Joan_LGITAct_ICG1020S_rev0_S_data1.bin"
-#define JOAN_0616_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_0_BIN_2 "bu24235_dl_program_Joan_LGITAct_ICG1020S_rev0_S_data2.bin"
-#define JOAN_0630_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_3_BIN_1 "bu24235_dl_program_Joan_LGITAct_ICG1020S_rev3_S_data1.bin"
-#define JOAN_0630_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_3_BIN_2 "bu24235_dl_program_Joan_LGITAct_ICG1020S_rev3_S_data2.bin"
-#define JOAN_0719_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_5_BIN_1 "bu24235_dl_program_Joan_LGITAct_ICG1020S_rev5_S_data1.bin"
-#define JOAN_0719_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_5_BIN_2 "bu24235_dl_program_Joan_LGITAct_ICG1020S_rev5_S_data2.bin"
+#define JOAN_0616_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_0_BIN_1 "bu24235_dl_program_phoenix_LGITAct_ICG1020S_rev0_S_data1.bin"
+#define JOAN_0616_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_0_BIN_2 "bu24235_dl_program_phoenix_LGITAct_ICG1020S_rev0_S_data2.bin"
+#define JOAN_0630_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_3_BIN_1 "bu24235_dl_program_phoenix_LGITAct_ICG1020S_rev3_S_data1.bin"
+#define JOAN_0630_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_3_BIN_2 "bu24235_dl_program_phoenix_LGITAct_ICG1020S_rev3_S_data2.bin"
+#define JOAN_0719_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_5_BIN_1 "bu24235_dl_program_phoenix_LGITAct_ICG1020S_rev5_S_data1.bin"
+#define JOAN_0719_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_5_BIN_2 "bu24235_dl_program_phoenix_LGITAct_ICG1020S_rev5_S_data2.bin"
+#define PHOENIX_0612_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_1_BIN_1 "bu24235_dl_program_Phoenix_LGIT_ICG1020S_rev1_S_data1.bin"
+#define PHOENIX_0612_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_1_BIN_2 "bu24235_dl_program_Phoenix_LGIT_ICG1020S_rev1_S_data2.bin"
 
 #define JOAN_0616_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_0_CHECKSUM	0x00014555
 #define JOAN_0630_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_3_CHECKSUM	0x00014AB9
 #define JOAN_0719_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_5_CHECKSUM	0x00014523
+#define PHOENIX_0612_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_1_CHECKSUM	0x0001453E
 
 /*If changed FW, change above FW bin and Checksum information*/
 
@@ -134,6 +137,29 @@ static struct ois_i2c_bin_list JOAN_0719_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_5_BIN_D
 		},
 	},
 	.checksum = JOAN_0719_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_5_CHECKSUM
+};
+
+static struct ois_i2c_bin_list PHOENIX_0612_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_1_BIN_DATA = {
+	.files = 2,
+	.entries = {
+		{
+			.filename = PHOENIX_0612_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_1_BIN_1,
+			.filesize = 0x0338, //824byte
+			.blocks = 1,
+			.addrs = {
+				{0x0000, 0x0337, 0x0000},
+			}
+		},
+		{
+			.filename = PHOENIX_0612_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_1_BIN_2,
+			.filesize = 0x01C0,
+			.blocks = 1,
+			.addrs = {
+				{0x0000, 0x01BF, 0x1C00},
+			}
+		},
+	},
+	.checksum = PHOENIX_0612_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_1_CHECKSUM
 };
 
 /*If changed FW, change above FW bin and Checksum information*/
@@ -269,7 +295,7 @@ int lgit_imx351_rohm_ois_init_cmd(int limit)
 		return rc;
 	}
 
-	if (cal_ver ==  0x0101 || cal_ver == 0x0301) {
+	if (cal_ver ==  0x0101 || cal_ver == 0x0301 || cal_ver == 0x0111) {
 		CDBG("%s 1. 0x6023 0x%x \n", __func__, ois_status);
 		RegWriteA(0x6023, 0x00);
 	}
@@ -387,7 +413,7 @@ int lgit_imx351_rohm_ois_calibration(int ver)
 	}
 
 	/* Gyro On */
-	if (cal_ver == 0x0101 || cal_ver == 0x0301) {
+	if (cal_ver == 0x0101 || cal_ver == 0x0301 || cal_ver == 0x0111) {
 		RegWriteA(0x6023, 0x00);
 	}
 
@@ -493,6 +519,10 @@ int32_t lgit_imx351_init_set_rohm_ois(struct msm_ois_ctrl_t *o_ctrl,
 		case 0x0101:
 			pr_err("[CHECK] %s: JOAN_0630_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_3_BIN_DATA, 1M_3S\n", __func__);
 			rc = lgit_imx351_rohm_ois_bin_download(JOAN_0630_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_3_BIN_DATA);
+			break;
+	  case 0x0111:
+			pr_err("[CHECK] %s: PHOENIX_0612_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_1_BIN_DATA\n", __func__);
+			rc = lgit_imx351_rohm_ois_bin_download(PHOENIX_0612_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_1_BIN_DATA);
 			break;
 		case 0x0301:
 			pr_err("[CHECK] %s: JOAN_0719_LGIT_OLAF_ACTUATOR_FIRMWARE_VER_5_BIN_DATA, 3M_5S\n", __func__);
@@ -702,6 +732,7 @@ int32_t lgit_imx351_rohm_ois_move_lens(struct msm_ois_ctrl_t *o_ctrl,
 	switch (cal_ver) {
 		/* LGIT Actuator */
 		case 0x0101:
+		case 0x0111:
 		case 0x0301:
 			hallx =  offset[0] * GYRO_GAIN_LGIT / HALL_SCALE_FACTOR;
 			hally =  offset[1] * GYRO_GAIN_LGIT / HALL_SCALE_FACTOR;
@@ -761,7 +792,7 @@ int32_t lgit_imx351_rohm_ois_pwm_mode(struct msm_ois_ctrl_t *o_ctrl,
 	}
 	if (pwm_prev_mode != mode) {
 		pwm_prev_mode = mode;
-		if(cal_ver == 0x0301){
+		if(cal_ver == 0x0301 || cal_ver == 0x0111){
 			switch (mode) {
 				case OIS_IMG_SENSOR_REG_A:
 					/* RES_0(Reg_A1) Full-resolution 16M (4656x3492), 30fps */

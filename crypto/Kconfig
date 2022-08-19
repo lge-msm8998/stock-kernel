@@ -1632,6 +1632,19 @@ config CRYPTO_DRBG
 
 endif	# if CRYPTO_DRBG_MENU
 
+config LGCRYPTO_FIPS_ENABLE
+    bool "FIPS140-2 compliant build"
+    default n
+    help
+          This flag is used to make current build FIPS140-2
+          compliant. This flag will enable the patch of code
+          which will perform this task. Please select Y here
+          to enable.
+
+config LGECRYPTO_FIPS_ADDED_SIGNATURE_SIZE
+    int "FIPS integrity check Image size"
+    default 710
+
 config FIPS_RECOMPILE
     bool "Recompile FIPS140-2 certified binaries"
     default n

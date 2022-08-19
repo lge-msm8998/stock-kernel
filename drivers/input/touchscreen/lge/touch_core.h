@@ -24,23 +24,27 @@
 #include <linux/platform_device.h>
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 #include <linux/earlysuspend.h>
+#elif defined(CONFIG_DRM) && defined(CONFIG_FB)
+#include <linux/msm_drm_notify.h>
 #elif defined(CONFIG_FB)
 #include <linux/fb.h>
 #endif
 #include <linux/notifier.h>
 #include <linux/atomic.h>
-#include <linux/wakelock.h>
 #include <linux/input.h>
 #include <linux/input/mt.h>
-
 #include <touch_hwif.h>
 #include <linux/input/lge_touch_notify.h>
+#include <linux/lge_panel_notify.h>
 
 #define LGE_TOUCH_NAME			"lge_touch"
 #define LGE_TOUCH_DRIVER_NAME		"lge_touch_driver"
 #define MAX_FINGER			10
 #define MAX_LPWG_CODE			128
 #define EUPGRADE			140
+#define EHWRESET			141
+#define ESWRESET			142
+#define EGLOBALRESET			143
 
 enum TOUCH_DEBUG {
 	_NONE                      = 0,
@@ -105,6 +109,8 @@ enum {
 	POWER_WAKE,
 	POWER_ON,
 	POWER_SLEEP_STATUS,
+	POWER_HW_RESET,
+	POWER_SW_RESET,
 };
 
 enum {
@@ -301,6 +307,12 @@ enum {
 	TOUCH_UEVENT_SIZE,
 };
 
+enum {
+	APP_HOME = 0,
+	APP_CONTACTS,
+	APP_MENU,
+};
+
 struct state_info {
 	atomic_t core;
 	atomic_t pm;
@@ -356,6 +368,9 @@ struct touch_operation_role {
 	u32 use_lpwg_test;
 	bool hide_coordinate;
 	u32 mfts_lpwg;
+	bool use_firmware;
+	bool use_fw_upgrade;
+	bool use_fw_recovery;
 };
 
 struct touch_quick_cover {
@@ -421,6 +436,29 @@ struct lpwg_info {
 	struct point code[MAX_LPWG_CODE];
 };
 
+struct app_info {
+	int app;
+	char version[10];
+	int icon_size;
+	int touch_slop;
+};
+
+struct perf_test_info {
+	bool enable;
+	u32 jig_size;
+	u32 delay;
+	u16 pressure;
+	u16 width;
+	u16 click_x;
+	u16 click_y;
+	u16 v_drag_x;
+	u16 v_drag_start_y;
+	u16 v_drag_end_y;
+	u16 h_drag_start_x;
+	u16 h_drag_end_x;
+	u16 h_drag_y;
+};
+
 struct touch_core_data {
 	struct platform_device *pdev;
 
@@ -432,8 +470,6 @@ struct touch_core_data {
 	struct input_dev *input;
 	struct touch_driver *driver;
 	struct kobject kobj;
-
-	struct wake_lock lpwg_wake_lock;
 
 	int reset_pin;
 	int int_pin;
@@ -479,15 +515,19 @@ struct touch_core_data {
 	struct delayed_work upgrade_work;
 	struct delayed_work notify_work;
 	struct delayed_work fb_work;
+	struct delayed_work panel_reset_work;
 
 	struct notifier_block blocking_notif;
 	struct notifier_block atomic_notif;
+	struct notifier_block display_notif;
 	struct notifier_block notif;
 	unsigned long notify_event;
 	int notify_data;
 	struct atomic_notify_event notify_event_arr[ATOMIC_NOTIFY_EVENT_SIZE];
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 	struct early_suspend early_suspend;
+#elif defined(CONFIG_DRM) & defined(CONFIG_FB)
+        struct notifier_block drm_notif;
 #elif defined(CONFIG_FB)
 	struct notifier_block fb_notif;
 #endif
@@ -501,6 +541,9 @@ struct touch_core_data {
 
 	u32 tx_pa;
 	u32 rx_pa;
+
+	struct app_info app_data[3];
+	struct perf_test_info perf_test;
 };
 
 #define PROPERTY_GPIO(np, string, target)				\
@@ -579,10 +622,15 @@ extern void touch_suspend(struct device *dev);
 extern void touch_resume(struct device *dev);
 
 enum touch_device_type {
-	TYPE_SW49407,
+	TYPE_DUMMY,
 	TYPE_SW49408,
-	TYPE_NOTOUCH,
+	TYPE_SW49409,
+	TYPE_SW49410,
+	TYPE_SW43402,
+	TYPE_SW43406,
+	TYPE_SW43408,
 	TYPE_FTM4,
+	TYPE_S3707,
 	TYPE_MAX,
 };
 

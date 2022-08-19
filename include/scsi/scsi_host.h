@@ -665,6 +665,9 @@ struct Scsi_Host {
 	/* The controller does not support WRITE SAME */
 	unsigned no_write_same:1;
 
+	/* Inline encryption support? */
+	unsigned inlinecrypt_support:1;
+
 	unsigned use_blk_mq:1;
 	unsigned use_cmd_list:1;
 
@@ -741,9 +744,6 @@ struct Scsi_Host {
 	struct device *dma_dev;
 #ifdef CONFIG_USB_HOST_NOTIFY
 	unsigned int  by_usb;
-#endif
-#ifdef CONFIG_SCSI_DEVICE_IDENTIFIER
-	unsigned int by_ufs;
 #endif
 
 	/*

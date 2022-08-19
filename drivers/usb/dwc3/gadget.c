@@ -37,9 +37,8 @@
 #include "gadget.h"
 #include "debug.h"
 #include "io.h"
-#ifdef CONFIG_LGE_USB_FACTORY
-#include <soc/qcom/lge/board_lge.h>
-#endif
+#include <soc/qcom/lge/power/lge_cable_detect.h>
+#include <soc/qcom/lge/power/lge_power_class.h>
 
 static void dwc3_gadget_wakeup_interrupt(struct dwc3 *dwc, bool remote_wakeup);
 static int dwc3_gadget_wakeup_int(struct dwc3 *dwc);
@@ -1837,6 +1836,20 @@ static int dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on, int suspend)
 	u32			reg;
 	u32			timeout = 500;
 	ktime_t start, diff;
+#ifdef CONFIG_LGE_USB_FACTORY
+	int rc = 0;
+	int boot_cable = 0;
+	union lge_power_propval lge_val = {0,};
+	struct lge_power *lge_cd_lpc;
+	lge_cd_lpc = lge_power_get_by_name("lge_cable_detect");
+	if(!lge_cd_lpc) {
+		pr_err("%s: lge_cd_lpc is not registered\n",__func__);
+	} else {
+		rc = lge_cd_lpc->get_property(lge_cd_lpc,
+				LGE_POWER_PROP_CABLE_TYPE_BOOT, &lge_val);
+		boot_cable = lge_val.intval;
+	}
+#endif
 
 	reg = dwc3_readl(dwc->regs, DWC3_DCTL);
 	if (is_on) {
@@ -1917,7 +1930,7 @@ static int dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on, int suspend)
 	} while (1);
 
 #ifdef CONFIG_LGE_USB_FACTORY
-	if ((lge_get_boot_cable() == LT_CABLE_130K) && is_on) {
+	if ((boot_cable == LT_CABLE_130K) && is_on) {
 		reg = dwc3_readl(dwc->regs, DWC3_DCFG);
 		reg &= ~(DWC3_DCFG_SPEED_MASK);
 		reg |= DWC3_DCFG_FULLSPEED2;

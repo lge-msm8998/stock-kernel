@@ -23,10 +23,14 @@
 	};
 };
 
-&vendor {
-	lge-veneer-psy {
-		unified-bootmode {
-			lge,plmn-name = "VZW_POSTPAID";
-		};
+&soc {
+	lge,vzw_req {
+		compatible = "lge,vzw_req";
+		lge,under_chg_current = <450>;
+	};
+
+	lge,store_mode {
+		lge,llk_max = <35>;
+		lge,llk_min = <30>;
 	};
 };

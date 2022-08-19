@@ -606,6 +606,7 @@ static void hidg_disable(struct usb_function *f)
 #ifdef CONFIG_LGE_USB_GADGET
 	}
 #endif
+
 }
 
 static int hidg_set_alt(struct usb_function *f, unsigned intf, unsigned alt)

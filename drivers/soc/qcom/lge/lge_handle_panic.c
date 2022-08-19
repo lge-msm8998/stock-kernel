@@ -138,26 +138,40 @@ inline static void lge_set_key_crash_cnt(int key, int* clear)
 	pr_info("%s: Ready to panic %d : count %d, time gap %ld!\n", __func__, key, key_crash_cnt, key_crash_gap);
 }
 
-void lge_gen_key_panic(int key)
+void lge_gen_key_panic(int key, int status)
 {
 	int clear = 1;
 	int order = key_crash_cnt % 3;
-
+	static int valid = 0;
 	if(lge_get_download_mode() != 1)
 		return;
 
 	if(((key == KEY_VOLUMEDOWN) && (order == 0))
 		|| ((key == KEY_POWER) && (order == 1))
-		|| ((key == KEY_VOLUMEUP) && (order == 2)))
-		lge_set_key_crash_cnt(key, &clear);
+		|| ((key == KEY_VOLUMEUP) && (order == 2))) {
+		if(status == 0) {
+			if(valid == 1) {
+				valid = 0;
+				lge_set_key_crash_cnt(key, &clear);
+			}
+		} else {
+			valid = 1;
+			return;
+		}
+	}
 
 	if (clear == 1) {
-		key_crash_cnt = 0;
+		if (valid == 1)
+			valid = 0;
+
+		if (key_crash_cnt > 0 )
+			key_crash_cnt = 0;
+
 		pr_debug("%s: Ready to panic %d : cleared!\n", __func__, key);
 		return;
 	}
 
-	if (key_crash_cnt == 7) {
+	if (key_crash_cnt >= 7) {
 		gen_key_panic = 1;
 		panic("%s: Generate panic by key!\n", __func__);
 	}

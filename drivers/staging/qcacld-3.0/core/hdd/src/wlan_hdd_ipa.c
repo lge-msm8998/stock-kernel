@@ -805,34 +805,6 @@ static inline bool hdd_ipa_uc_sta_is_enabled(hdd_context_t *hdd_ctx)
 	return HDD_IPA_IS_CONFIG_ENABLED(hdd_ctx, HDD_IPA_UC_STA_ENABLE_MASK);
 }
 
-
-/**
- * hdd_ipa_uc_sta_only_offload_is_enabled()
- *
- * STA only IPA offload is needed on MDM platforms to support
- * tethering scenarios in STA-SAP configurations when SAP is idle.
- *
- * Currently in STA-SAP configurations, IPA pipes are enabled only
- * when a wifi client is connected to SAP.
- *
- * Impact of this API is only limited to when IPA pipes are enabled
- * and disabled. To take effect, HDD_IPA_UC_STA_ENABLE_MASK needs to
- * set to 1.
- *
- * Return: true if MDM_PLATFORM is defined, false otherwise
- */
-#ifdef MDM_PLATFORM
-static inline bool hdd_ipa_uc_sta_only_offload_is_enabled(void)
-{
-	return true;
-}
-#else
-static inline bool hdd_ipa_uc_sta_only_offload_is_enabled(void)
-{
-	return false;
-}
-#endif
-
 /**
  * hdd_ipa_uc_sta_reset_sta_connected() - Reset sta_connected flag
  * @hdd_ipa: Global HDD IPA context
@@ -913,7 +885,7 @@ bool hdd_ipa_is_fw_wdi_actived(hdd_context_t *hdd_ctx)
  * __hdd_ipa_wdi_meter_notifier_cb() - WLAN to IPA callback handler.
  * IPA calls to get WLAN stats or set quota limit.
  * @priv: pointer to private data registered with IPA (we register a
- *Â»       pointer to the global IPA context)
+ *¡í       pointer to the global IPA context)
  * @evt: the IPA event which triggered the callback
  * @data: data associated with the event
  *
@@ -1034,7 +1006,7 @@ static void __hdd_ipa_wdi_meter_notifier_cb(enum ipa_wdi_meter_evt_type evt,
  * hdd_ipa_wdi_meter_notifier_cb() - WLAN to IPA callback handler.
  * IPA calls to get WLAN stats or set quota limit.
  * @priv: pointer to private data registered with IPA (we register a
- *Â»       pointer to the global IPA context)
+ *¡í       pointer to the global IPA context)
  * @evt: the IPA event which triggered the callback
  * @data: data associated with the event
  *
@@ -2256,12 +2228,6 @@ static int hdd_ipa_wdi_enable_pipes(struct hdd_ipa_priv *hdd_ipa)
 	struct ol_txrx_pdev_t *pdev = cds_get_context(QDF_MODULE_ID_TXRX);
 	int result;
 
-	if (!pdev) {
-		HDD_IPA_LOG(QDF_TRACE_LEVEL_ERROR, "pdev is NULL");
-		result = QDF_STATUS_E_FAILURE;
-		return result;
-	}
-
 	/* Map IPA SMMU for all Rx hash table */
 	result = ol_txrx_rx_hash_smmu_map(pdev, true);
 	if (result) {
@@ -2324,12 +2290,6 @@ static int hdd_ipa_wdi_disable_pipes(struct hdd_ipa_priv *hdd_ipa)
 {
 	struct ol_txrx_pdev_t *pdev = cds_get_context(QDF_MODULE_ID_TXRX);
 	int result;
-
-	if (!pdev) {
-		HDD_IPA_LOG(QDF_TRACE_LEVEL_ERROR, "pdev is NULL");
-		result = QDF_STATUS_E_FAILURE;
-		return result;
-	}
 
 	HDD_IPA_LOG(QDF_TRACE_LEVEL_DEBUG, "Disable RX PIPE");
 	result = ipa_suspend_wdi_pipe(hdd_ipa->rx_pipe_handle);
@@ -6789,7 +6749,7 @@ static int __hdd_ipa_wlan_evt(hdd_adapter_t *adapter, uint8_t sta_id,
 	struct ipa_msg_meta meta;
 	struct ipa_wlan_msg *msg;
 	struct ipa_wlan_msg_ex *msg_ex = NULL;
-	int ret = 0;
+	int ret;
 
 	if (hdd_validate_adapter(adapter)) {
 		HDD_IPA_LOG(QDF_TRACE_LEVEL_ERROR, "Invalid adapter: 0x%pK",
@@ -6914,29 +6874,12 @@ static int __hdd_ipa_wlan_evt(hdd_adapter_t *adapter, uint8_t sta_id,
 		}
 
 		if (hdd_ipa_uc_sta_is_enabled(hdd_ipa->hdd_ctx) &&
-		    (hdd_ipa->sap_num_connected_sta > 0 ||
-		     hdd_ipa_uc_sta_only_offload_is_enabled()) &&
+		    (hdd_ipa->sap_num_connected_sta > 0) &&
 		    !hdd_ipa->sta_connected) {
 			qdf_mutex_release(&hdd_ipa->event_lock);
 			hdd_ipa_uc_offload_enable_disable(adapter,
 				SIR_STA_RX_DATA_OFFLOAD, true);
 			qdf_mutex_acquire(&hdd_ipa->event_lock);
-		}
-
-		if (!hdd_ipa_uc_sta_only_offload_is_enabled()) {
-			HDD_IPA_LOG(QDF_TRACE_LEVEL_DEBUG,
-					"IPA uC STA only offload not enabled");
-		} else if (!hdd_ipa->sap_num_connected_sta &&
-				!hdd_ipa->sta_connected) {
-			ret = hdd_ipa_uc_handle_first_con(hdd_ipa);
-			if (ret) {
-				qdf_mutex_release(&hdd_ipa->event_lock);
-				HDD_IPA_LOG(QDF_TRACE_LEVEL_ERROR,
-						"handle 1st conn ret %d", ret);
-				hdd_ipa_uc_offload_enable_disable(adapter,
-						SIR_STA_RX_DATA_OFFLOAD, false);
-				goto end;
-			}
 		}
 
 		hdd_ipa->vdev_to_iface[adapter->sessionId] =
@@ -7003,23 +6946,15 @@ static int __hdd_ipa_wlan_evt(hdd_adapter_t *adapter, uint8_t sta_id,
 			hdd_debug("%s: IPA UC OFFLOAD NOT ENABLED",
 				msg_ex->name);
 		} else {
-			/*
-			 * Disable IPA UC TX PIPE when
-			 * 1. STA is the last interface, Or
-			 * 2. STA only offload enabled and no clients connected
-			 * to SAP
-			 */
-			if (((1 == hdd_ipa->num_iface) ||
-				(hdd_ipa_uc_sta_only_offload_is_enabled() &&
-				 !hdd_ipa->sap_num_connected_sta)) &&
+			/* Disable IPA UC TX PIPE when STA disconnected */
+			if ((1 == hdd_ipa->num_iface) &&
 			    hdd_ipa_is_fw_wdi_actived(hdd_ipa->hdd_ctx) &&
 			    !hdd_ipa->ipa_pipes_down)
 				hdd_ipa_uc_handle_last_discon(hdd_ipa);
 		}
 
 		if (hdd_ipa_uc_sta_is_enabled(hdd_ipa->hdd_ctx) &&
-		    (hdd_ipa->sap_num_connected_sta > 0 ||
-		     hdd_ipa_uc_sta_only_offload_is_enabled())) {
+		    (hdd_ipa->sap_num_connected_sta > 0)) {
 			qdf_mutex_release(&hdd_ipa->event_lock);
 			hdd_ipa_uc_offload_enable_disable(adapter,
 				SIR_STA_RX_DATA_OFFLOAD, false);
@@ -7107,8 +7042,7 @@ static int __hdd_ipa_wlan_evt(hdd_adapter_t *adapter, uint8_t sta_id,
 		if (hdd_ipa->sap_num_connected_sta == 0 &&
 				hdd_ipa->uc_loaded == true) {
 			if (hdd_ipa_uc_sta_is_enabled(hdd_ipa->hdd_ctx) &&
-			    hdd_ipa->sta_connected &&
-			    !hdd_ipa_uc_sta_only_offload_is_enabled()) {
+			    hdd_ipa->sta_connected) {
 				qdf_mutex_release(&hdd_ipa->event_lock);
 				hdd_ipa_uc_offload_enable_disable(
 					hdd_get_adapter(hdd_ipa->hdd_ctx,
@@ -7117,15 +7051,8 @@ static int __hdd_ipa_wlan_evt(hdd_adapter_t *adapter, uint8_t sta_id,
 				qdf_mutex_acquire(&hdd_ipa->event_lock);
 			}
 
-			/*
-			 * IPA pipes already enabled if STA only offload
-			 * is enabled and STA is connected.
-			 */
-			if (hdd_ipa_uc_sta_only_offload_is_enabled() &&
-					hdd_ipa->sta_connected) {
-				HDD_IPA_LOG(QDF_TRACE_LEVEL_DEBUG,
-						"IPA pipes already enabled");
-			} else if (hdd_ipa_uc_handle_first_con(hdd_ipa)) {
+			ret = hdd_ipa_uc_handle_first_con(hdd_ipa);
+			if (ret) {
 				HDD_IPA_LOG(QDF_TRACE_LEVEL_ERROR,
 					    "%s: handle 1st con ret %d",
 					    adapter->dev->name, ret);
@@ -7143,7 +7070,7 @@ static int __hdd_ipa_wlan_evt(hdd_adapter_t *adapter, uint8_t sta_id,
 					qdf_mutex_release(&hdd_ipa->event_lock);
 				}
 
-				return -EPERM;
+				return ret;
 			}
 		}
 
@@ -7212,15 +7139,9 @@ static int __hdd_ipa_wlan_evt(hdd_adapter_t *adapter, uint8_t sta_id,
 		}
 		hdd_ipa->sap_num_connected_sta--;
 
-		/*
-		 * Disable IPA UC TX PIPE when
-		 * 1. last client disconnected SAP and
-		 * 2. STA is not connected
-		 */
+		/* Disable IPA UC TX PIPE when last STA disconnected */
 		if (!hdd_ipa->sap_num_connected_sta &&
-				(hdd_ipa->uc_loaded == true) &&
-				!(hdd_ipa_uc_sta_only_offload_is_enabled() &&
-					hdd_ipa->sta_connected)) {
+				hdd_ipa->uc_loaded == true) {
 			if ((false == hdd_ipa->resource_unloading) &&
 			    hdd_ipa_is_fw_wdi_actived(hdd_ipa->hdd_ctx) &&
 			    !hdd_ipa->ipa_pipes_down) {
@@ -7642,33 +7563,4 @@ void hdd_ipa_clean_adapter_iface(hdd_adapter_t *adapter)
 	if (iface_ctx)
 		hdd_ipa_cleanup_iface(iface_ctx);
 }
-
-void hdd_ipa_fw_rejuvenate_send_msg(hdd_context_t *hdd_ctx)
-{
-	struct hdd_ipa_priv *hdd_ipa;
-	struct ipa_msg_meta meta;
-	struct ipa_wlan_msg *msg;
-	int ret;
-
-	hdd_ipa = hdd_ctx->hdd_ipa;
-	meta.msg_len = sizeof(*msg);
-	msg = qdf_mem_malloc(meta.msg_len);
-	if (!msg) {
-		HDD_IPA_LOG(QDF_TRACE_LEVEL_DEBUG, "msg allocation failed");
-		return;
-	}
-	meta.msg_type = WLAN_FWR_SSR_BEFORE_SHUTDOWN;
-	HDD_IPA_LOG(QDF_TRACE_LEVEL_DEBUG, "ipa_send_msg(Evt:%d)",
-		    meta.msg_type);
-	ret = ipa_send_msg(&meta, msg, hdd_ipa_msg_free_fn);
-
-	if (ret) {
-		HDD_IPA_LOG(QDF_TRACE_LEVEL_ERROR,
-			    "ipa_send_msg(Evt:%d)-fail=%d",
-			    meta.msg_type, ret);
-		qdf_mem_free(msg);
-	}
-	hdd_ipa->stats.num_send_msg++;
-}
-
 #endif /* IPA_OFFLOAD */

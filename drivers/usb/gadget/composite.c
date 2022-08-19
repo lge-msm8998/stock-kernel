@@ -41,6 +41,13 @@ module_param(disable_l1_for_hs, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(disable_l1_for_hs,
 	"Disable support for L1 LPM for HS devices");
 
+#ifdef CONFIG_LGE_USB_GADGET_MULTI_CONFIG
+static bool disable_multi_config;
+module_param(disable_multi_config, bool, 0644);
+MODULE_PARM_DESC(disable_multi_config,
+	"Disable support for Multiple Configuration");
+#endif
+
 /**
  * struct usb_os_string - represents OS String to be reported by a gadget
  * @bLength: total length of the entire descritor, always 0x12
@@ -1672,6 +1679,14 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 				}
 			}
 
+#ifdef CONFIG_LGE_USB_GADGET_MULTI_CONFIG
+			if (w_length < (u16) sizeof cdev->desc)
+				cdev->disable_multi_config = true;
+
+			if (disable_multi_config || cdev->disable_multi_config)
+				cdev->desc.bNumConfigurations = 1;
+#endif
+
 			value = min(w_length, (u16) sizeof cdev->desc);
 			memcpy(req->buf, &cdev->desc, value);
 			break;
@@ -2102,6 +2117,7 @@ void composite_disconnect(struct usb_gadget *gadget)
 	}
 #ifdef CONFIG_LGE_USB_GADGET_MULTI_CONFIG
 	cdev->is_mac_os = false;
+	cdev->disable_multi_config = false;
 #endif
 	spin_unlock_irqrestore(&cdev->lock, flags);
 }

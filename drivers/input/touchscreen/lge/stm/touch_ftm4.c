@@ -3582,6 +3582,8 @@ static void ftm4_fail_reason_event_handler(struct device *dev, u8 *data)
 	u8 tci2_fail_reason = 0;
 	u8 swipe_fail_reason = 0;
 	u32 mode = ts->tci.mode;
+	u8 tap_count = ts->tci.info[TCI_2].tap_count;
+	int i = 0;
 	char *swipe_str[5] = {"", "up", "down", "right", "left"};
 
 	TOUCH_TRACE();
@@ -3598,11 +3600,13 @@ static void ftm4_fail_reason_event_handler(struct device *dev, u8 *data)
 			TOUCH_I("%s: overtap interrupt\n", __func__);
 			ts->intr_status = TOUCH_IRQ_PASSWD;
 
-			ts->lpwg.code[0].x = 1;
-			ts->lpwg.code[0].y = 1;
+			for (i = 0; i < tap_count; i++) {
+				ts->lpwg.code[i].x = 0;
+				ts->lpwg.code[i].y = 0;
+			}
 
-			ts->lpwg.code[1].x = -1;
-			ts->lpwg.code[1].y = -1;
+			ts->lpwg.code[tap_count].x = -1;
+			ts->lpwg.code[tap_count].y = -1;
 
 			return;
 		}

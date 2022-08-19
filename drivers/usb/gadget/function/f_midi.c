@@ -214,10 +214,6 @@ static struct usb_gadget_strings *midi_strings[] = {
 static inline struct usb_request *midi_alloc_ep_req(struct usb_ep *ep,
 						    unsigned length)
 {
-#ifdef CONFIG_LGE_USB_GADGET
-	if (length % ep->desc->wMaxPacketSize)
-		length = ep->desc->wMaxPacketSize;
-#endif
 	return alloc_ep_req(ep, length, length);
 }
 

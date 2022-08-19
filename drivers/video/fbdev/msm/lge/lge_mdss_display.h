@@ -19,6 +19,5 @@
 #include "lge_mdss_dsi.h"
 #include "lge_mdss_dsi_panel.h"
 #include "lge_mdss_fb.h"
-#include "lge_mdss_ambient.h"
 
 #endif /* LGE_MDSS_DSISPLAY_H */

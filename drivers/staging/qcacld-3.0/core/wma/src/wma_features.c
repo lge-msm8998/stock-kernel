@@ -7820,20 +7820,21 @@ QDF_STATUS wma_process_add_periodic_tx_ptrn_ind(WMA_HANDLE handle,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	params_ptr = qdf_mem_malloc(sizeof(*params_ptr));
+
+	if (!params_ptr) {
+		WMA_LOGE(
+			"%s: unable to allocate memory for periodic_tx_pattern",
+			 __func__);
+		return QDF_STATUS_E_NOMEM;
+	}
+
 	if (!wma_find_vdev_by_addr(wma_handle,
 				   pAddPeriodicTxPtrnParams->mac_address.bytes,
 				   &vdev_id)) {
 		WMA_LOGE("%s: Failed to find vdev id for %pM", __func__,
 			 pAddPeriodicTxPtrnParams->mac_address.bytes);
 		return QDF_STATUS_E_INVAL;
-	}
-
-	params_ptr = qdf_mem_malloc(sizeof(*params_ptr));
-	if (!params_ptr) {
-		WMA_LOGE(
-			"%s: unable to allocate memory for periodic_tx_pattern",
-			 __func__);
-		return QDF_STATUS_E_NOMEM;
 	}
 
 	params_ptr->ucPtrnId = pAddPeriodicTxPtrnParams->ucPtrnId;
@@ -8431,8 +8432,8 @@ void wma_send_regdomain_info_to_fw(uint32_t reg_dmn, uint16_t regdmn2G,
 			reg_dmn, regdmn2G, regdmn5G, ctl2G, ctl5G);
 	if (status == QDF_STATUS_E_NOMEM)
 		return;
-	// LGE uses CTRY_JAPAN14 for keeping O OS structure
-	if ((((reg_dmn & ~CTRY_FLAG) == CTRY_JAPAN14) ||
+
+	if ((((reg_dmn & ~CTRY_FLAG) == CTRY_JAPAN15) ||
 	     ((reg_dmn & ~CTRY_FLAG) == CTRY_KOREA_ROC)) &&
 	    (true == wma->tx_chain_mask_cck))
 		cck_mask_val = 1;
@@ -10838,26 +10839,6 @@ QDF_STATUS wma_set_sar_limit(WMA_HANDLE handle,
 	return ret;
 }
 
-QDF_STATUS wma_send_coex_config_cmd(WMA_HANDLE wma_handle,
-				    struct coex_config_params *coex_cfg_params)
-{
-	tp_wma_handle wma = (tp_wma_handle)wma_handle;
-
-	if (!wma || !wma->wmi_handle) {
-		WMA_LOGE("%s: WMA is closed, can not issue coex config command",
-			 __func__);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (!coex_cfg_params) {
-		WMA_LOGE("%s: coex cfg params ptr NULL", __func__);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	return wmi_unified_send_coex_config_cmd(wma->wmi_handle,
-					       coex_cfg_params);
-}
-
 #ifdef WLAN_FEATURE_DISA
 /**
  * wma_encrypt_decrypt_msg() -
@@ -11078,11 +11059,6 @@ int wma_unified_power_debug_stats_event_handler(void *handle,
 	uint32_t power_stats_len, stats_registers_len, *debug_registers;
 
 	tpAniSirGlobal mac = (tpAniSirGlobal)cds_get_context(QDF_MODULE_ID_PE);
-
-	if (!cmd_param_info) {
-		WMA_LOGE("cmd_param_info got NULL");
-		return -EINVAL;
-	}
 
 	param_tlvs =
 		(WMI_PDEV_CHIP_POWER_STATS_EVENTID_param_tlvs *) cmd_param_info;
@@ -11407,25 +11383,21 @@ int wma_pdev_div_info_evt_handler(void *handle, u_int8_t *event_buf,
 		return -EINVAL;
 	}
 
-	if (event->num_chains_valid > CHAIN_MAX_NUM) {
-		WMA_LOGE(FL("Invalid num of chains"));
-		return -EINVAL;
-	}
-
 	WMI_MAC_ADDR_TO_CHAR_ARRAY(&event->macaddr, macaddr);
 	WMA_LOGD(FL("macaddr: " MAC_ADDRESS_STR), MAC_ADDR_ARRAY(macaddr));
 
 	WMA_LOGD(FL("num_chains_valid: %d"), event->num_chains_valid);
 	chain_rssi_result.num_chains_valid = event->num_chains_valid;
 
+	for (i = 0; i < CHAIN_MAX_NUM; i++)
+		WMA_LOGD(FL("chain_rssi: %d"), event->chain_rssi[i]);
 	qdf_mem_copy(chain_rssi_result.chain_rssi, event->chain_rssi,
 						sizeof(event->chain_rssi));
-	for (i = 0; i < event->num_chains_valid; i++) {
-		WMA_LOGD(FL("chain_rssi: %d, ant_id: %d"),
-			 event->chain_rssi[i], event->ant_id[i]);
+	for (i = 0; i < event->num_chains_valid; i++)
 		chain_rssi_result.chain_rssi[i] += WMA_TGT_NOISE_FLOOR_DBM;
-	}
 
+	for (i = 0; i < CHAIN_MAX_NUM; i++)
+		WMA_LOGD(FL("ant_id: %d"), event->ant_id[i]);
 	qdf_mem_copy(chain_rssi_result.ant_id, event->ant_id,
 						sizeof(event->ant_id));
 

@@ -2042,7 +2042,6 @@ static int __wlan_hdd_cfg80211_scan(struct wiphy *wiphy,
 		hdd_err("firmware is down, scan cmd cannot be processed");
 		return -EINVAL;
 	}
-
 #ifdef FEATURE_SUPPORT_LGE
 /*LGE_CHNAGE_S, DRIVER scan_suppress command, 2017-07-12, moon-wifi@lge.com*/
 	if ((g_scansuppress_mode == 1) && (request->wdev->iftype != NL80211_IFTYPE_AP)) {

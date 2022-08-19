@@ -265,7 +265,7 @@ static struct ion_buffer *ion_buffer_create(struct ion_heap *heap,
 	ion_buffer_add(dev, buffer);
 	mutex_unlock(&dev->buffer_lock);
 	atomic_long_add(len, &heap->total_allocated);
-#if defined(CONFIG_MACH_LGE)
+#if defined(CONFIG_LGE_ION_TEST_CODE)
 	buffer->create_ts = sched_clock();
 	get_task_comm(buffer->create_task_comm, current);
 	buffer->create_task_pid = task_pid_nr(current);
@@ -1453,7 +1453,7 @@ struct dma_buf *ion_share_dma_buf(struct ion_client *client,
 		ion_buffer_put(buffer);
 		return dmabuf;
 	}
-#if defined(CONFIG_MACH_LGE)
+#if defined(CONFIG_LGE_ION_TEST_CODE)
 	buffer->share_ts = sched_clock();
 	get_task_comm(buffer->share_task_comm, current);
 	buffer->share_task_pid = task_pid_nr(current);
@@ -1543,7 +1543,7 @@ struct ion_handle *ion_import_dma_buf(struct ion_client *client, int fd)
 	}
 
 end:
-#if defined(CONFIG_MACH_LGE)
+#if defined(CONFIG_LGE_ION_TEST_CODE)
 	buffer->import_ts = sched_clock();
 	get_task_comm(buffer->import_task_comm, current);
 	buffer->import_task_pid = task_pid_nr(current);
@@ -1932,7 +1932,7 @@ static int ion_debug_heap_show(struct seq_file *s, void *unused)
 				heap->free_list_size);
 	seq_puts(s, "----------------------------------------------------\n");
 
-#if defined(CONFIG_MACH_LGE)
+#if defined(CONFIG_LGE_ION_TEST_CODE)
 	seq_puts(s, "aux information for system heap buffers:\n");
 	mutex_lock(&dev->buffer_lock);
 	for (n = rb_first(&dev->buffers); n; n = rb_next(n)) {
@@ -1966,7 +1966,7 @@ static int ion_debug_heap_show(struct seq_file *s, void *unused)
 	if (heap->debug_show)
 		heap->debug_show(heap, s, unused);
 
-#if defined(CONFIG_MACH_LGE)
+#if defined(CONFIG_LGE_ION_TEST_CODE)
 	/* Error condition
 	1. heap->id = ION_SYSTEM_HEAP_ID &&
  	2. total_size >= 1 GB */

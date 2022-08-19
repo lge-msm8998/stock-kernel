@@ -2,7 +2,7 @@
  * drivers/staging/android/ion/ion_system_heap.c
  *
  * Copyright (C) 2011 Google, Inc.
- * Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -295,6 +295,9 @@ static struct page_info *alloc_from_pool_preferred(
 	struct page_info *info;
 	int i;
 
+	if (buffer->flags & ION_FLAG_POOL_FORCE_ALLOC)
+		goto force_alloc;
+
 	info = kmalloc(sizeof(*info), GFP_KERNEL);
 	if (!info)
 		return NULL;
@@ -326,6 +329,7 @@ static struct page_info *alloc_from_pool_preferred(
 	}
 
 	kfree(info);
+force_alloc:
 	return alloc_largest_available(heap, buffer, size, max_order);
 }
 
@@ -814,20 +818,20 @@ static int ion_system_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
 		if (use_seq) {
 			seq_printf(s,
 				"%d order %u highmem pages in highorder pool = %lu total\n",
-				pool->high_count, pool->order,
+				atomic_read(&pool->high_count), pool->order,
 				(1 << pool->order) * PAGE_SIZE *
-					pool->high_count);
+					atomic_read(&pool->high_count));
 			seq_printf(s,
 				"%d order %u lowmem pages in highorder pool = %lu total\n",
-				pool->low_count, pool->order,
+				atomic_read(&pool->low_count), pool->order,
 				(1 << pool->order) * PAGE_SIZE *
-					pool->low_count);
+					atomic_read(&pool->low_count));
 		}
 
 		highorder_total += (1 << pool->order) * PAGE_SIZE *
-			pool->high_count;
+			atomic_read(&pool->high_count);
 		highorder_total += (1 << pool->order) * PAGE_SIZE *
-			pool->low_count;
+			atomic_read(&pool->low_count);
 	}
 #endif
 
@@ -836,20 +840,20 @@ static int ion_system_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
 		if (use_seq) {
 			seq_printf(s,
 				"%d order %u highmem pages in uncached pool = %lu total\n",
-				pool->high_count, pool->order,
+				atomic_read(&pool->high_count), pool->order,
 				(1 << pool->order) * PAGE_SIZE *
-					pool->high_count);
+					atomic_read(&pool->high_count));
 			seq_printf(s,
 				"%d order %u lowmem pages in uncached pool = %lu total\n",
-				pool->low_count, pool->order,
+				atomic_read(&pool->low_count), pool->order,
 				(1 << pool->order) * PAGE_SIZE *
-					pool->low_count);
+					atomic_read(&pool->low_count));
 		}
 
 		uncached_total += (1 << pool->order) * PAGE_SIZE *
-			pool->high_count;
+			atomic_read(&pool->high_count);
 		uncached_total += (1 << pool->order) * PAGE_SIZE *
-			pool->low_count;
+			atomic_read(&pool->low_count);
 	}
 
 	for (i = 0; i < num_orders; i++) {
@@ -857,19 +861,19 @@ static int ion_system_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
 		if (use_seq) {
 			seq_printf(s,
 				"%d order %u highmem pages in cached pool = %lu total\n",
-				pool->high_count, pool->order,
-				(1 << pool->order) * PAGE_SIZE * pool->high_count);
+				atomic_read(&pool->high_count), pool->order,
+				(1 << pool->order) * PAGE_SIZE * atomic_read(&pool->high_count));
 			seq_printf(s,
 				"%d order %u lowmem pages in cached pool = %lu total\n",
-				pool->low_count, pool->order,
+				atomic_read(&pool->low_count), pool->order,
 				(1 << pool->order) * PAGE_SIZE *
-					pool->low_count);
+					atomic_read(&pool->low_count));
 		}
 
 		cached_total += (1 << pool->order) * PAGE_SIZE *
-			pool->high_count;
+			atomic_read(&pool->high_count);
 		cached_total += (1 << pool->order) * PAGE_SIZE *
-			pool->low_count;
+			atomic_read(&pool->low_count);
 	}
 
 	for (i = 0; i < num_orders; i++) {
@@ -881,20 +885,20 @@ static int ion_system_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
 			if (use_seq) {
 				seq_printf(s,
 					   "VMID %d: %d order %u highmem pages in secure pool = %lu total\n",
-					   j, pool->high_count, pool->order,
+					   j, atomic_read(&pool->high_count), pool->order,
 					   (1 << pool->order) * PAGE_SIZE *
-						pool->high_count);
+						atomic_read(&pool->high_count));
 				seq_printf(s,
 					   "VMID  %d: %d order %u lowmem pages in secure pool = %lu total\n",
-					   j, pool->low_count, pool->order,
+					   j, atomic_read(&pool->low_count), pool->order,
 					   (1 << pool->order) * PAGE_SIZE *
-						pool->low_count);
+						atomic_read(&pool->low_count));
 			}
 
 			secure_total += (1 << pool->order) * PAGE_SIZE *
-					 pool->high_count;
+					 atomic_read(&pool->high_count);
 			secure_total += (1 << pool->order) * PAGE_SIZE *
-					 pool->low_count;
+					 atomic_read(&pool->low_count);
 		}
 	}
 

@@ -190,7 +190,7 @@ struct sock *cookie_v6_check(struct sock *sk, struct sk_buff *skb)
 #ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
 #ifdef CONFIG_MPTCP
 	if (mopt.saw_mpc)
-		req = inet_reqsk_alloc(&mptcp6_request_sock_ops, sk, false);
+		req = inet_reqsk_alloc(&mptcp6_request_sock_ops, sk);
 	else
 #endif
 #endif

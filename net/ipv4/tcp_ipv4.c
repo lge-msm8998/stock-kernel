@@ -1346,15 +1346,12 @@ static void tcp_v4_init_req(struct request_sock *req,
 
 	sk_rcv_saddr_set(req_to_sk(req), ip_hdr(skb)->daddr);
 	sk_daddr_set(req_to_sk(req), ip_hdr(skb)->saddr);
-	ireq->no_srccheck = inet_sk(sk_listener)->transparent;
 	RCU_INIT_POINTER(ireq->ireq_opt, tcp_v4_save_options(skb));
+
 #ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
-   /* 2015-07-10 bongsook.jeong@lge.com, LGP_DATA_TCPIP_MPTCP [START] */
-	//tcp syn is drop in TCP_LISTEN state.
-	ireq->ir_mark = inet_request_mark(sk_listener, skb);
-	/* 2015-07-10 bongsook.jeong@lge.com, LGP_DATA_TCPIP_MPTCP [END] */
 	return 0;
 #endif
+
 }
 
 static struct dst_entry *tcp_v4_route_req(const struct sock *sk,

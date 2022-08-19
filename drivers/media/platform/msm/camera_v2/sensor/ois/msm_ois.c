@@ -433,20 +433,17 @@ static int msm_ois_init(struct msm_ois_ctrl_t *o_ctrl)
 
 	switch(map_ver)
 	{
-#ifdef RENESAS_MODULE
+#if 0 //def RENESAS_MODULE
 		case 0xFF:
 		case 0x01:
 		case 0x02:
 			msm_renesas_ois_init(o_ctrl);
 			break;
 #endif
-		case 0x03:
+		default:
 			lgit_imx351_rohm_ois_init(o_ctrl);
 			local_msm_ois_t->sid_ois = o_ctrl->sid_ois;
 			break;
-		default:
-			printk("%s : unknown module! map_version = %d\n", __func__, map_ver);
-			return -EINVAL;
 	}
 #endif
 	o_ctrl->ois_state = OIS_OPS_ACTIVE;

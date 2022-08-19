@@ -107,9 +107,6 @@
  *	in /proc for a task before it execs a suid executable.
  */
 
-#ifdef CONFIG_HSWAP
-struct timespec ts;
-#endif
 struct pid_entry {
 	const char *name;
 	int len;
@@ -1216,20 +1213,30 @@ static ssize_t oom_score_adj_write(struct file *file, const char __user *buf,
 
 #ifdef CONFIG_HSWAP
 	if (!task->signal->oom_score_adj) {
-		ts = current_kernel_time();
-		task->signal->top_time += ts.tv_sec - task->signal->before_time;
-		if (task->signal->reclaimed)
+		long diff_time;
+		long diff_time_ms;
+
+		diff_time = ((long)jiffies - (long)task->signal->before_time);
+		task->signal->top_time += diff_time;
+		diff_time_ms = diff_time * ((MSEC_PER_SEC) / HZ);
+		if (diff_time_ms > 3000) {
+			task->signal->top_count++;
 			task->signal->reclaimed = 0;
+		}
+
+		/* quicksearchbox do not count on top activity */
+		if (diff_time_ms > 3000 && strncmp(task->comm, "earchbox:search", 15) == 0) {
+			task->signal->top_time -= diff_time;
+			task->signal->top_count--;
+		}
 	}
 #endif
 
 	task->signal->oom_score_adj = (short)oom_score_adj;
 
 #ifdef CONFIG_HSWAP
-	if (!task->signal->oom_score_adj) {
-		ts = current_kernel_time();
-		task->signal->before_time = ts.tv_sec;
-	}
+	if (!task->signal->oom_score_adj)
+		task->signal->before_time = (long)jiffies;
 #endif
 
 	if (has_capability_noaudit(current, CAP_SYS_RESOURCE))
@@ -3063,6 +3070,18 @@ static int proc_pid_personality(struct seq_file *m, struct pid_namespace *ns,
 	return err;
 }
 
+#ifdef CONFIG_HSWAP
+static int proc_hswap_factors(struct seq_file *m, struct pid_namespace *ns,
+		struct pid *pid, struct task_struct *task)
+{
+	seq_printf(m, "task(%s) top time = %ld, top count = %d\n",
+			task->comm,
+			task->signal->top_time,
+			task->signal->top_count);
+	return 0;
+}
+#endif
+
 /*
  * Thread groups
  */
@@ -3146,6 +3165,9 @@ static const struct pid_entry tgid_base_stuff[] = {
 	ONE("oom_score",  S_IRUGO, proc_oom_score),
 	REG("oom_adj",    S_IRUGO|S_IWUSR, proc_oom_adj_operations),
 	REG("oom_score_adj", S_IRUGO|S_IWUSR, proc_oom_score_adj_operations),
+#ifdef CONFIG_HSWAP
+	ONE("show_hswap_factor", S_IRUGO, proc_hswap_factors),
+#endif
 #ifdef CONFIG_AUDITSYSCALL
 	REG("loginuid",   S_IWUSR|S_IRUGO, proc_loginuid_operations),
 	REG("sessionid",  S_IRUGO, proc_sessionid_operations),
@@ -3540,6 +3562,9 @@ static const struct pid_entry tid_base_stuff[] = {
 	ONE("oom_score", S_IRUGO, proc_oom_score),
 	REG("oom_adj",   S_IRUGO|S_IWUSR, proc_oom_adj_operations),
 	REG("oom_score_adj", S_IRUGO|S_IWUSR, proc_oom_score_adj_operations),
+#ifdef CONFIG_HSWAP
+	ONE("show_hswap_factor", S_IRUGO|S_IWUSR, proc_hswap_factors),
+#endif
 #ifdef CONFIG_AUDITSYSCALL
 	REG("loginuid",  S_IWUSR|S_IRUGO, proc_loginuid_operations),
 	REG("sessionid",  S_IRUGO, proc_sessionid_operations),

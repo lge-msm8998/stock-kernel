@@ -464,7 +464,7 @@ static int __hdd_netdev_notifier_call(struct notifier_block *nb,
 	}
 
 	if (!dev->ieee80211_ptr) {
-		hdd_debug("ieee80211_ptr is NULL!!!");
+		hdd_err("ieee80211_ptr is NULL!!!");
 		return NOTIFY_DONE;
 	}
 
@@ -476,19 +476,12 @@ static int __hdd_netdev_notifier_call(struct notifier_block *nb,
 	}
 
 	if (hdd_ctx->driver_status == DRIVER_MODULES_CLOSED) {
-		hdd_debug("%s: Driver module is closed", __func__);
+		hdd_err("%s: Driver module is closed", __func__);
 		return NOTIFY_DONE;
 	}
 
-	if (cds_is_driver_recovering()) {
-		hdd_debug("Driver is recovering");
+	if (cds_is_driver_recovering() || cds_is_driver_in_bad_state())
 		return NOTIFY_DONE;
-	}
-
-	if (cds_is_driver_in_bad_state()) {
-		hdd_debug("Driver is in failed recovery state");
-		return NOTIFY_DONE;
-	}
 
 	hdd_debug("%s New Net Device State = %lu",
 	       dev->name, state);
@@ -2426,12 +2419,6 @@ int hdd_wlan_start_modules(hdd_context_t *hdd_ctx, hdd_adapter_t *adapter,
 		goto release_lock;
 	}
 	hdd_ctx->start_modules_in_progress = false;
-#ifdef FEATURE_SUPPORT_LGE
-/*LGE_CHNAGE_S, DRIVER scan_suppress command, 2017-07-12, moon-wifi@lge.com*/
-	wlan_hdd_set_scan_suppress(0);
-/*LGE_CHNAGE_E, DRIVER scan_suppress command, 2017-07-12, moon-wifi@lge.com*/
-#endif
-
 	mutex_unlock(&hdd_ctx->iface_change_lock);
 	EXIT();
 	return 0;
@@ -2545,8 +2532,7 @@ static int __hdd_open(struct net_device *dev)
 		goto err_hdd_hdd_init_deinit_lock;
 
 	set_bit(DEVICE_IFACE_OPENED, &adapter->event_flags);
-	hdd_info("%s interface up, event-flags: %lx ", dev->name,
-		 adapter->event_flags);
+	hdd_info("%s interface up", dev->name);
 
 	if (hdd_conn_is_connected(WLAN_HDD_GET_STATION_CTX_PTR(adapter))) {
 		hdd_info("Enabling Tx Queues");
@@ -2630,9 +2616,9 @@ static int __hdd_stop(struct net_device *dev)
 	 * Disable TX on the interface, after this hard_start_xmit() will not
 	 * be called on that interface
 	 */
-	hdd_info("Disabling queues, adapter device mode: %s(%d), event-flags: %lx ",
+	hdd_info("Disabling queues, adapter device mode: %s(%d)",
 		 hdd_device_mode_to_string(adapter->device_mode),
-		 adapter->device_mode, adapter->event_flags);
+		 adapter->device_mode);
 
 	wlan_hdd_netif_queue_control(adapter,
 				     WLAN_STOP_ALL_NETIF_QUEUE_N_CARRIER,
@@ -3249,14 +3235,16 @@ static hdd_adapter_t *hdd_alloc_station_adapter(hdd_context_t *hdd_ctx,
 				&adapter->qdf_session_open_event);
 		if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 			hdd_err("Session open QDF event init failed!");
-			goto err_qdf_init;
+			free_netdev(adapter->dev);
+			return NULL;
 		}
 
 		qdf_status = qdf_event_create(
 				&adapter->qdf_session_close_event);
 		if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 			hdd_err("Session close QDF event init failed!");
-			goto err_qdf_init;
+			free_netdev(adapter->dev);
+			return NULL;
 		}
 
 		init_completion(&adapter->disconnect_comp_var);
@@ -3274,11 +3262,7 @@ static hdd_adapter_t *hdd_alloc_station_adapter(hdd_context_t *hdd_ctx,
 		init_completion(&adapter->tdls_link_establish_req_comp);
 #endif
 		init_completion(&adapter->ibss_peer_info_comp);
-		qdf_status = qdf_event_create(&adapter->change_country_code);
-		if (QDF_IS_STATUS_ERROR(qdf_status)) {
-			hdd_err("Change country code event init failed!");
-			goto err_qdf_init;
-		}
+		init_completion(&adapter->change_country_code);
 
 
 		init_completion(&adapter->scan_info.abortscan_event_var);
@@ -3317,11 +3301,8 @@ static hdd_adapter_t *hdd_alloc_station_adapter(hdd_context_t *hdd_ctx,
 		spin_lock_init(&adapter->pause_map_lock);
 		adapter->start_time = adapter->last_time = qdf_system_ticks();
 	}
-	return adapter;
 
-err_qdf_init:
-	free_netdev(adapter->dev);
-	return NULL;
+	return adapter;
 }
 
 static QDF_STATUS hdd_register_interface(hdd_adapter_t *adapter, bool rtnl_held)
@@ -3428,46 +3409,6 @@ static QDF_STATUS hdd_check_and_init_tdls(hdd_adapter_t *adapter, uint32_t type)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
-/**
- * hdd_update_ini_params() - Update config values to default ini param values
- * @hdd_ctx: hdd context
- *
- * This function is used to update the specific config values that can change
- * at run time to its default ini param values. For example in LONU driver
- * if initial_scan_no_dfs_chnl is set to 1 by default, after scan request it
- * is setting to 0 in csr_scan_request() which leads to scan DFS channels also.
- * So, we need to update initial_scan_no_dfs_chnl to its default ini value.
- *
- * Return: QDF_STATUS
- */
-static QDF_STATUS hdd_update_ini_params(hdd_context_t *hdd_ctx)
-{
-	QDF_STATUS status;
-	tSmeConfigParams *sme_config;
-
-	sme_config = qdf_mem_malloc(sizeof(*sme_config));
-	if (!sme_config) {
-		hdd_err("unable to allocate sme_config");
-		return QDF_STATUS_E_NOMEM;
-	}
-
-	status = sme_get_config_param(hdd_ctx->hHal, sme_config);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("sme get config failed");
-		goto err;
-	}
-
-	sme_config->csrConfig.initial_scan_no_dfs_chnl =
-		hdd_ctx->config->initial_scan_no_dfs_chnl;
-
-	status = sme_update_config(hdd_ctx->hHal, sme_config);
-	if (QDF_IS_STATUS_ERROR(status))
-		hdd_err("sme update config failed");
-err:
-	qdf_mem_free(sme_config);
-	return status;
-}
 
 QDF_STATUS hdd_init_station_mode(hdd_adapter_t *adapter)
 {
@@ -3625,12 +3566,6 @@ QDF_STATUS hdd_init_station_mode(hdd_adapter_t *adapter)
 
 	/* rcpi info initialization */
 	qdf_mem_zero(&adapter->rcpi, sizeof(adapter->rcpi));
-
-	if ((adapter->device_mode == QDF_STA_MODE) ||
-	    (adapter->device_mode == QDF_P2P_CLIENT_MODE)) {
-		ret_val = hdd_update_ini_params(hdd_ctx);
-		return ret_val;
-	}
 
 	return QDF_STATUS_SUCCESS;
 
@@ -4859,7 +4794,7 @@ QDF_STATUS hdd_stop_adapter(hdd_context_t *hdd_ctx, hdd_adapter_t *adapter,
 
 	if (!test_bit(SME_SESSION_OPENED, &adapter->event_flags)) {
 		hdd_err("session %d is not open %lu",
-			adapter->sessionId, adapter->event_flags);
+			adapter->device_mode, adapter->event_flags);
 		return -ENODEV;
 	}
 
@@ -4988,6 +4923,7 @@ QDF_STATUS hdd_stop_adapter(hdd_context_t *hdd_ctx, hdd_adapter_t *adapter,
 			QDF_STATUS status;
 			QDF_STATUS qdf_status;
 
+			hdd_ipa_ap_disconnect(adapter);
 			/* Stop Bss. */
 			status = wlansap_stop_bss(
 					WLAN_HDD_GET_SAP_CTX_PTR(adapter));
@@ -5232,8 +5168,6 @@ QDF_STATUS hdd_reset_all_adapters(hdd_context_t *hdd_ctx)
 
 			wlansap_cleanup_cac_timer(
 				WLAN_HDD_GET_SAP_CTX_PTR(adapter));
-
-			qdf_atomic_set(&adapter->sessionCtx.ap.acs_in_progress, 0);
 		}
 
 		status = hdd_get_next_adapter(hdd_ctx, adapterNode, &pNext);
@@ -8810,12 +8744,9 @@ static void hdd_iface_change_callback(void *priv)
 
 	ENTER();
 	hdd_debug("Interface change timer expired close the modules!");
-	// 2018.01.16 Add synchronization for hdd_iface_change_callback and wlan_hdd_pld_remove, QCT Case 03298903
-	mutex_lock(&hdd_init_deinit_lock);
 	ret = hdd_wlan_stop_modules(hdd_ctx, false);
 	if (ret)
 		hdd_err("Failed to stop modules");
-	mutex_unlock(&hdd_init_deinit_lock);
 	EXIT();
 }
 
@@ -9194,11 +9125,12 @@ static int hdd_update_country_code(hdd_context_t *hdd_ctx,
 {
 	QDF_STATUS status;
 	int ret = 0;
+	unsigned long rc;
 
 	if (country_code == NULL)
 		return 0;
 
-	qdf_event_reset(&adapter->change_country_code);
+	INIT_COMPLETION(adapter->change_country_code);
 
 	status = sme_change_country_code(hdd_ctx->hHal,
 					 wlan_hdd_change_country_code_callback,
@@ -9213,9 +9145,9 @@ static int hdd_update_country_code(hdd_context_t *hdd_ctx,
 		return -EINVAL;
 	}
 
-	status = qdf_wait_for_event_completion(&adapter->change_country_code,
-					       WLAN_WAIT_TIME_COUNTRY);
-	if (QDF_IS_STATUS_ERROR(status)) {
+	rc = wait_for_completion_timeout(&adapter->change_country_code,
+			 msecs_to_jiffies(WLAN_WAIT_TIME_COUNTRY));
+	if (!rc) {
 		hdd_err("SME while setting country code timed out");
 		ret = -ETIMEDOUT;
 	}
@@ -10015,100 +9947,6 @@ static void hdd_send_all_sme_action_ouis(hdd_context_t *hdd_ctx)
 }
 
 /**
- * hdd_send_coex_config_params() - Send coex config params to FW
- * @hdd_ctx: HDD context
- * @adapter: Primary adapter context
- *
- * This function is used to send all coex config related params to FW
- *
- * Return: QDF_STATUS
- */
-static QDF_STATUS hdd_send_coex_config_params(hdd_context_t *hdd_ctx,
-					      hdd_adapter_t *adapter)
-{
-	QDF_STATUS status;
-	struct coex_config_params coex_cfg_params = {0};
-	struct hdd_config *config;
-
-	if (!hdd_ctx) {
-		hdd_err("hdd_ctx is invalid");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (!adapter) {
-		hdd_err("adapter is invalid");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	config = hdd_ctx->config;
-	if (!config) {
-		hdd_err("hdd config got NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	coex_cfg_params.vdev_id = adapter->sessionId;
-	coex_cfg_params.config_type = COEX_CONFIG_TX_POWER;
-	coex_cfg_params.config_value[0] = config->set_max_tx_power_for_btc;
-
-	status = sme_send_coex_config_cmd(&coex_cfg_params);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("Failed to send coex Tx power");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	coex_cfg_params.config_type = COEX_CONFIG_HANDOVER_RSSI;
-	coex_cfg_params.config_value[0] = config->set_wlan_low_rssi_threshold;
-
-	status = sme_send_coex_config_cmd(&coex_cfg_params);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("Failed to send coex handover RSSI");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	coex_cfg_params.config_type = COEX_CONFIG_BTC_MODE;
-	coex_cfg_params.config_value[0] = config->set_btc_mode;
-
-	status = sme_send_coex_config_cmd(&coex_cfg_params);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("Failed to send coex BTC mode");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	coex_cfg_params.config_type = COEX_CONFIG_ANTENNA_ISOLATION;
-	coex_cfg_params.config_value[0] = config->set_antenna_isolation;
-
-	status = sme_send_coex_config_cmd(&coex_cfg_params);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("Failed to send coex antenna isolation");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	coex_cfg_params.config_type = COEX_CONFIG_BT_LOW_RSSI_THRESHOLD;
-	coex_cfg_params.config_value[0] = config->set_bt_low_rssi_threshold;
-
-	status = sme_send_coex_config_cmd(&coex_cfg_params);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("Failed to send coex BT low RSSI threshold");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	coex_cfg_params.config_type = COEX_CONFIG_BT_INTERFERENCE_LEVEL;
-	coex_cfg_params.config_value[0] = config->set_bt_interference_low_ll;
-	coex_cfg_params.config_value[1] = config->set_bt_interference_low_ul;
-	coex_cfg_params.config_value[2] = config->set_bt_interference_medium_ll;
-	coex_cfg_params.config_value[3] = config->set_bt_interference_medium_ul;
-	coex_cfg_params.config_value[4] = config->set_bt_interference_high_ll;
-	coex_cfg_params.config_value[5] = config->set_bt_interference_high_ul;
-
-	status = sme_send_coex_config_cmd(&coex_cfg_params);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("Failed to send coex BT interference level");
-		return QDF_STATUS_E_FAILURE;
-	}
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
  * hdd_pre_enable_configure() - Configurations prior to cds_enable
  * @hdd_ctx:	HDD context
  *
@@ -10325,8 +10163,9 @@ int hdd_dbs_scan_selection_init(hdd_context_t *hdd_ctx)
 			       (CFG_DBS_SCAN_PARAM_PER_CLIENT
 				* CFG_DBS_SCAN_CLIENTS_MAX));
 
+	hdd_info("numentries %hu", numentries);
 	if (!numentries) {
-		hdd_debug("Do not send scan_selection_config");
+		hdd_info("Donot send scan_selection_config");
 		return 0;
 	}
 
@@ -10510,9 +10349,11 @@ static int hdd_features_init(hdd_context_t *hdd_ctx, hdd_adapter_t *adapter)
 		goto out;
 	}
 
-	hdd_init_mws_coex(adapter);
-
-	hdd_send_coex_config_params(hdd_ctx, adapter);
+	ret = hdd_init_mws_coex(adapter);
+	if (ret) {
+		hdd_err("Error initializing mws-coex");
+		goto out;
+	}
 
 	/* FW capabilities received, Set the Dot11 mode */
 	sme_setdef_dot11mode(hdd_ctx->hHal);
@@ -11266,8 +11107,12 @@ int hdd_wlan_startup(struct device *dev)
 
 	if (hdd_ctx->config->fIsImpsEnabled)
 		hdd_set_idle_ps_config(hdd_ctx, true);
+// LGE_PATCH_S : set IMPS according to INI (CN03163379)
+#ifdef FEATURE_SUPPORT_LGE
 	else
 		hdd_set_idle_ps_config(hdd_ctx, false);
+#endif
+// LGE_PATCH_E : set IMPS according to INI (CN03163379)
 
 	qdf_sched_delayed_work(&hdd_ctx->iface_idle_work,
 			       hdd_ctx->config->iface_change_wait_time);
@@ -12157,6 +12002,7 @@ void wlan_hdd_stop_sap(hdd_adapter_t *ap_adapter)
 		hostapd_state = WLAN_HDD_GET_HOSTAP_STATE_PTR(ap_adapter);
 		hdd_debug("Now doing SAP STOPBSS");
 		qdf_event_reset(&hostapd_state->qdf_stop_bss_event);
+		hdd_ipa_ap_disconnect(ap_adapter);
 		if (QDF_STATUS_SUCCESS == wlansap_stop_bss(hdd_ap_ctx->
 							sapContext)) {
 			qdf_status = qdf_wait_for_event_completion(
@@ -12217,9 +12063,6 @@ void wlan_hdd_start_sap(hdd_adapter_t *ap_adapter, bool reinit)
 		hdd_err("SAP Not able to set AP IEs");
 		goto end;
 	}
-
-	cds_set_channel_params(hdd_ap_ctx->sapConfig.channel, 0,
-			       &hdd_ap_ctx->sapConfig.ch_params);
 
 	qdf_event_reset(&hostapd_state->qdf_event);
 	if (wlansap_start_bss(hdd_ap_ctx->sapContext, hdd_hostapd_sap_event_cb,

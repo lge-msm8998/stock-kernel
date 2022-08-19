@@ -35,7 +35,6 @@
 #define DMA_TPG_FIFO_LEN 64
 
 #if defined(CONFIG_LGE_DISPLAY_COMMON)
-extern int panel_not_connected;
 extern int skip_lcd_error_check;
 #endif
 
@@ -3120,8 +3119,8 @@ static bool mdss_dsi_timeout_status(struct mdss_dsi_ctrl_pdata *ctrl)
 			dsi_send_events(ctrl, DSI_EV_LP_RX_TIMEOUT, 0);
 		pr_err("%s: status=%x\n", __func__, status);
 		ret = true;
-
 	}
+
 	return ret;
 }
 

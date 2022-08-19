@@ -29,9 +29,6 @@
 #include "smb-lib.h"
 #include "storm-watch.h"
 #include <linux/pmic-voter.h>
-#ifdef CONFIG_LGE_PM
-#include <linux/of_gpio.h>
-#endif
 
 #define SMB138X_DEFAULT_FCC_UA 1000000
 #define SMB138X_DEFAULT_ICL_UA 1500000
@@ -110,9 +107,6 @@ struct smb138x {
 	struct smb_dt_props	dt;
 	struct power_supply	*parallel_psy;
 	u32			wa_flags;
-#ifdef CONFIG_LGE_PM
-	uint32_t		smb_bat_en;
-#endif
 };
 
 static int __debug_mask;
@@ -213,41 +207,9 @@ static int smb138x_parse_dt(struct smb138x *chip)
 #ifdef CONFIG_LGE_PM
 	chip->dt.disable_connector_temp = of_property_read_bool(node,
 				"lge,disable-connector-temp");
-
-	chip->smb_bat_en = of_get_named_gpio(node, "lge,smb-bat-en-gpio", 0);
-
-	if (!gpio_is_valid(chip->smb_bat_en)) {
-		pr_err("Unable to sbu gpio %d.\n", chip->smb_bat_en);
-	}
-	pr_info("Parallel charger batfet gpio %d\n", chip->smb_bat_en);
 #endif
 	return 0;
 }
-
-#ifdef CONFIG_LGE_PM
-int smb138x_set_smb_bat_en(struct smb138x *chip, bool bat_en) {
-	int rc = 0;
-
-	if (!gpio_is_valid(chip->smb_bat_en)) {
-		pr_info("Couldn't set parallel batfet_en\n");
-		return -1;
-	}
-
-	if (!bat_en)
-		rc = gpiod_direction_output(gpio_to_desc(chip->smb_bat_en), true);
-	else
-		rc = gpiod_direction_output(gpio_to_desc(chip->smb_bat_en), false);
-
-	if (rc < 0) {
-		pr_info("Couldn't set parallel batfet_en rc=%d\n", rc);
-		return rc;
-	}
-
-	pr_info("Parallel batfet %s\n", bat_en ? "enabled" : "disabled");
-	return rc;
-
-}
-#endif
 
 /************************
  * USB PSY REGISTRATION *
@@ -610,6 +572,9 @@ int smb138x_get_prop_slave_status(struct smb_charger *chg,
 #endif
 
 static enum power_supply_property smb138x_parallel_props[] = {
+#ifdef CONFIG_LGE_PM
+	POWER_SUPPLY_PROP_PARALLEL_STATUS,
+#endif
 	POWER_SUPPLY_PROP_CHARGE_TYPE,
 	POWER_SUPPLY_PROP_CHARGING_ENABLED,
 	POWER_SUPPLY_PROP_PIN_ENABLED,
@@ -637,6 +602,19 @@ static int smb138x_parallel_get_prop(struct power_supply *psy,
 	u8 temp;
 
 	switch (prop) {
+#ifdef CONFIG_LGE_PM
+	case POWER_SUPPLY_PROP_PARALLEL_STATUS:
+		rc = smblib_read(chg, BATTERY_CHARGER_STATUS_5_REG,
+				&temp);
+		if (rc >= 0 && (temp & CHARGING_ENABLE_BIT)) {
+			rc = smb138x_get_prop_slave_status(chg, val);
+			if (rc < 0)
+				val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		}
+		else
+			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		break;
+#endif
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
 		rc = smblib_get_prop_batt_charge_type(chg, val);
 		break;
@@ -706,19 +684,6 @@ static int smb138x_parallel_get_prop(struct power_supply *psy,
 		/* Not in ship mode as long as device is active */
 		val->intval = 0;
 		break;
-#ifdef CONFIG_LGE_PM
-	case POWER_SUPPLY_PROP_PARALLEL_BATFET_MODE:
-		val->intval = POWER_SUPPLY_PL_NON_STACKED_BATFET;
-		break;
-
-	case POWER_SUPPLY_PROP_MIN_ICL:
-		val->intval = 0;
-		break;
-
-	case POWER_SUPPLY_PROP_PARALLEL_FCC_MAX:
-		val->intval = INT_MAX;
-		break;
-#endif
 	default:
 		pr_err("parallel power supply get prop %d not supported\n",
 			prop);
@@ -768,9 +733,6 @@ static int smb138x_parallel_set_prop(struct power_supply *psy,
 	switch (prop) {
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
 		rc = smb138x_set_parallel_suspend(chip, (bool)val->intval);
-#ifdef CONFIG_LGE_PM
-		rc |= smb138x_set_smb_bat_en(chip, (bool)!val->intval);
-#endif
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		if ((chip->dt.pl_mode == POWER_SUPPLY_PL_USBIN_USBIN)

@@ -24,7 +24,6 @@
 #include "msm8998-joan_kr-touch.dtsi"
 #include "msm8998-joan_kr-tdmb.dtsi"
 #include "msm8998-joan_kr-usb.dtsi"
-#include "msm8998-joan_kr-mme.dtsi"
 
 / {
 	reserved-memory {
@@ -195,8 +194,4 @@
 
 &wil6210 {
 	status = "disabled";
-};
-
-&qseecom_mem {
-       size = <0 0x1800000>;
 };

@@ -199,4 +199,10 @@ config LGE_PM_CC_PROTECT
 	default n
 	help
 	  Say Y to enable protect cc pin.
+config LGE_PM_FG_SANITY_CHECK
+	bool "FG Sanity Check work"
+	depends on LGE_PM
+	default n
+	help
+	  Say Y to enable FG Sanity Check Work.
 endmenu

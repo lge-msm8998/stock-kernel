@@ -65,7 +65,7 @@
 #define MAX_CHANNELS_PER_OPERATING_CLASS  25
 #define CDS_MAX_SUPP_OPER_CLASSES 32
 #define MIN_TX_PWR_CAP    8
-#define MAX_TX_PWR_CAP    22
+#define MAX_TX_PWR_CAP    30
 
 #define CTRY_DEFAULT          0
 #define CTRY_FLAG             0x8000
@@ -253,7 +253,6 @@ enum country_code {
 	CTRY_YEMEN = 887,
 	CTRY_ZIMBABWE = 716,
 	CTRY_JAPAN9 = 4009,
-	CTRY_JAPAN14 = 4014,
 	CTRY_JAPAN15 = 4015,
 	CTRY_JAPAN48 = 4048,
 	CTRY_JAPAN55 = 4055,
@@ -303,7 +302,6 @@ enum reg_domain {
 	ETSI10_WORLD = 0x24,
 	ETSI11_WORLD = 0x26,
 	ETSI13_WORLD = 0x28,
-	ETSI15_WORLD = 0x31,
 
 	APL4_WORLD = 0x42,
 	APL3_FCCA = 0x50,
@@ -407,7 +405,6 @@ enum reg_domain {
 	ETSI10 = 0x0D30,
 	ETSI11 = 0x0E30,
 	ETSI13 = 0x0E39,
-	ETSI15 = 0x0E41,
 
 	APL1 = 0x0150,
 	APL2 = 0x0250,

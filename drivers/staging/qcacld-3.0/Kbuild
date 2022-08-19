@@ -25,9 +25,9 @@ ifndef CONFIG_ROME_IF
 endif
 endif
 
-
 # Make WLAN as open-source driver by default
 WLAN_OPEN_SOURCE := 1
+
 ifeq ($(KERNEL_BUILD),1)
 	# These are provided in external module based builds
 	# Need to explicitly define for Kernel-based builds
@@ -126,8 +126,7 @@ ifeq ($(KERNEL_BUILD),1)
 
 	ifneq ($(CONFIG_ARCH_SDX20), y)
 	#Flag to enable FILS Feature (11ai)
-#	don't use it in lge devices. it is not verified yet
-#	CONFIG_WLAN_FEATURE_FILS := y
+	CONFIG_WLAN_FEATURE_FILS := y
 	endif
 
 	ifneq ($(CONFIG_QCA_CLD_WLAN),)
@@ -348,8 +347,6 @@ endif
 ifneq ($(CONFIG_MOBILE_ROUTER), y)
 #Enable IBSS support on CLD
 CONFIG_QCA_IBSS_SUPPORT := 1
-
-CONFIG_WLAN_SYSFS := y
 endif
 
 #Enable power management suspend/resume functionality to PCI
@@ -464,15 +461,12 @@ HDD_OBJS := 	$(HDD_SRC_DIR)/wlan_hdd_assoc.o \
 		$(HDD_SRC_DIR)/wlan_hdd_request_manager.o \
 		$(HDD_SRC_DIR)/wlan_hdd_scan.o \
 		$(HDD_SRC_DIR)/wlan_hdd_softap_tx_rx.o \
+		$(HDD_SRC_DIR)/wlan_hdd_sysfs.o \
 		$(HDD_SRC_DIR)/wlan_hdd_tx_rx.o \
 		$(HDD_SRC_DIR)/wlan_hdd_trace.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wext.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wmm.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wowl.o
-
-ifeq ($(CONFIG_WLAN_SYSFS), y)
-HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_sysfs.o
-endif
 
 ifeq ($(CONFIG_WLAN_DEBUGFS), y)
 HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_debugfs.o
@@ -1486,10 +1480,6 @@ endif
 
 ifeq ($(CONFIG_QCA_IBSS_SUPPORT), 1)
 CDEFINES += -DQCA_IBSS_SUPPORT
-endif
-
-ifeq ($(CONFIG_WLAN_SYSFS), y)
-CDEFINES += -DWLAN_SYSFS
 endif
 
 #Enable OL debug and wmi unified functions

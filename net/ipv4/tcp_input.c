@@ -197,11 +197,7 @@ static void tcp_incr_quickack(struct sock *sk, unsigned int max_quickacks)
 		icsk->icsk_ack.quick = quickacks;
 }
 
-#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
 void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks)
-#else
-void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks)
-#endif
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
 
@@ -5248,7 +5244,7 @@ static void tcp_check_space(struct sock *sk)
 #ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
 		if (mptcp(tcp_sk(sk)) ||
 		    (sk->sk_socket &&
-		    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)))		    
+		    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)))
 #else
 		if (sk->sk_socket &&
 		    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags))
@@ -5879,7 +5875,9 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 #ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
 	struct mptcp_options_received mopt;
 	mptcp_init_mp_opt(&mopt);
+#endif
 
+#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
 	tcp_parse_options(skb, &tp->rx_opt,
 			  mptcp(tp) ? &tp->mptcp->rx_opt : &mopt, 0, &foc, tp);
 #else

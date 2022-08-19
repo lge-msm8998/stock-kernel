@@ -46,6 +46,7 @@
 #include <linux/of_gpio.h>
 
 #include <soc/qcom/lge/board_lge.h>
+#include <soc/qcom/lge/power/lge_board_revision.h>
 
 #include <linux/nfc/cxd224x.h>
 #include <linux/wakelock.h>
@@ -244,7 +245,8 @@ static ssize_t cxd224x_dev_write(struct file *filp, const char __user *buf,
     ret = i2c_master_send(cxd224x_dev->client, tmp, count);
     if (ret != count) {
         dev_err(&cxd224x_dev->client->dev,
-            "failed to write %d\n", ret);
+            "failed to write %d, hvdd = %d, pon = %d\n", ret,
+             gpio_get_value(cxd224x_dev->hvdd_gpio), gpio_get_value(cxd224x_dev->wake_gpio));
         ret = -EIO;
     }
     mutex_unlock(&cxd224x_dev->read_mutex);

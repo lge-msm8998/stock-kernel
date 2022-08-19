@@ -224,6 +224,7 @@ void msm_ipc_router_set_ws_allowed(bool flag)
 	is_wakeup_source_allowed = flag;
 }
 
+
 static void init_routing_table(void)
 {
 	int i;
@@ -2748,15 +2749,15 @@ static void do_read_data(struct work_struct *work)
 	while ((pkt = rr_read(xprt_info)) != NULL) {
 		if (pkt->length < calc_rx_header_size(xprt_info) ||
 		    pkt->length > MAX_IPC_PKT_SIZE) {
-			IPC_RTR_ERR("%s: Invalid pkt length %d\n",
-				__func__, pkt->length);
+			IPC_RTR_ERR("%s: Invalid pkt length %d\n", __func__,
+				    pkt->length);
 			goto read_next_pkt1;
 		}
 
 		ret = extract_header(pkt);
 		if (ret < 0)
 			goto read_next_pkt1;
-		hdr = &(pkt->hdr);
+		hdr = &pkt->hdr;
 
 		if ((hdr->dst_node_id != IPC_ROUTER_NID_LOCAL) &&
 		    ((hdr->type == IPC_ROUTER_CTRL_CMD_RESUME_TX) ||

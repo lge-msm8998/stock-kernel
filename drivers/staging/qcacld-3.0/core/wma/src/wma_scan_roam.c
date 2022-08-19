@@ -968,10 +968,6 @@ QDF_STATUS wma_roam_scan_offload_mode(tp_wma_handle wma_handle,
 		params->roam_offload_enabled = roam_req->RoamOffloadEnabled;
 		params->roam_offload_params.ho_delay_for_rx =
 				roam_req->ho_delay_for_rx;
-		params->roam_offload_params.roam_preauth_retry_count =
-				roam_req->roam_preauth_retry_count;
-		params->roam_offload_params.roam_preauth_no_ack_timeout =
-				roam_req->roam_preauth_no_ack_timeout;
 		params->prefer_5ghz = roam_req->Prefer5GHz;
 		params->roam_rssi_cat_gap = roam_req->RoamRssiCatGap;
 		params->select_5ghz_margin = roam_req->Select5GHzMargin;
@@ -1016,17 +1012,13 @@ QDF_STATUS wma_roam_scan_offload_mode(tp_wma_handle wma_handle,
 		params->min_delay_btw_roam_scans,
 		params->roam_trigger_reason_bitmask);
 
-	WMA_LOGD(FL("roam_preauth_retry_count: %d, roam_preauth_no_ack_timeout: %d"),
-		 params->roam_offload_params.roam_preauth_retry_count,
-		 params->roam_offload_params.roam_preauth_no_ack_timeout);
-
 	status = wmi_unified_roam_scan_offload_mode_cmd(wma_handle->wmi_handle,
 				scan_cmd_fp, params);
-	qdf_mem_free(params);
 	if (QDF_IS_STATUS_ERROR(status))
 		return status;
 
 	WMA_LOGD("%s: WMA --> WMI_ROAM_SCAN_MODE", __func__);
+	qdf_mem_free(params);
 	return status;
 }
 
@@ -2861,29 +2853,14 @@ static void wma_roam_update_vdev(tp_wma_handle wma,
 	vdev_id = roam_synch_ind_ptr->roamedVdevId;
 	wma->interfaces[vdev_id].nss = roam_synch_ind_ptr->nss;
 	del_bss_params = qdf_mem_malloc(sizeof(*del_bss_params));
-	if (!del_bss_params)
-		return;
-
 	del_sta_params = qdf_mem_malloc(sizeof(*del_sta_params));
-	if (!del_sta_params) {
-		qdf_mem_free(del_bss_params);
-		return;
-	}
-
 	set_link_params = qdf_mem_malloc(sizeof(*set_link_params));
-	if (!set_link_params) {
-		qdf_mem_free(del_bss_params);
-		qdf_mem_free(del_sta_params);
-		return;
-	}
 	add_sta_params = qdf_mem_malloc(sizeof(*add_sta_params));
-	if (!add_sta_params) {
-		qdf_mem_free(del_bss_params);
-		qdf_mem_free(del_sta_params);
-		qdf_mem_free(set_link_params);
+	if (!del_bss_params || !del_sta_params ||
+		!set_link_params || !add_sta_params) {
+		WMA_LOGE("%s: failed to allocate memory", __func__);
 		return;
 	}
-
 	qdf_mem_zero(del_bss_params, sizeof(*del_bss_params));
 	qdf_mem_zero(del_sta_params, sizeof(*del_sta_params));
 	qdf_mem_zero(set_link_params, sizeof(*set_link_params));
@@ -3237,22 +3214,6 @@ int wma_roam_synch_frame_event_handler(void *handle, uint8_t *event,
 	if (synch_frame_event->vdev_id >= wma->max_bssid) {
 		WMA_LOGE("received invalid vdev_id %d",
 				 synch_frame_event->vdev_id);
-		return status;
-	}
-
-	if (synch_frame_event->bcn_probe_rsp_len >
-	    param_buf->num_bcn_probe_rsp_frame ||
-	    synch_frame_event->reassoc_req_len >
-	    param_buf->num_reassoc_req_frame ||
-	    synch_frame_event->reassoc_rsp_len >
-	    param_buf->num_reassoc_rsp_frame) {
-		WMA_LOGE("fixed/actual len err: bcn:%d/%d req:%d/%d rsp:%d/%d",
-			 synch_frame_event->bcn_probe_rsp_len,
-			 param_buf->num_bcn_probe_rsp_frame,
-			 synch_frame_event->reassoc_req_len,
-			 param_buf->num_reassoc_req_frame,
-			 synch_frame_event->reassoc_rsp_len,
-			 param_buf->num_reassoc_rsp_frame);
 		return status;
 	}
 
@@ -4700,7 +4661,6 @@ int wma_extscan_operations_event_handler(void *handle,
 			WMA_LOGE("FW mesg num_buk %d more than TLV hdr %d",
 				 oprn_event->num_buckets,
 				 param_buf->num_bucket_id);
-			qdf_mem_free(oprn_ind);
 			return -EINVAL;
 		}
 

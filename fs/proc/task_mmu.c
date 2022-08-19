@@ -1444,7 +1444,10 @@ cont:
 		if (!page)
 			continue;
 
-		if (isolate_lru_page(page))
+		if (PageTail(page))
+			continue;
+
+		if (isolate_evictable_lru_page(page))
 			continue;
 
 		list_add(&page->lru, &page_list);

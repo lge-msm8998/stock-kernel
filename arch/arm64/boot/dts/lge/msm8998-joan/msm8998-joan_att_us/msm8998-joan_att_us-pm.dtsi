@@ -25,12 +25,3 @@
 
 &soc {
 };
-
-&vendor {
-	lge-veneer-psy {
-		unified-bootmode {
-			lge,plmn-name = "ATT";
-		};
-	};
-};
-

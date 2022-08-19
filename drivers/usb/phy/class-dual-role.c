@@ -47,6 +47,7 @@ static struct device_attribute dual_role_attrs[] = {
 	DUAL_ROLE_ATTR(data_role),
 	DUAL_ROLE_ATTR(powers_vconn),
 #ifdef CONFIG_LGE_USB
+	DUAL_ROLE_ATTR(control),
 	DUAL_ROLE_ATTR(cc1),
 	DUAL_ROLE_ATTR(cc2),
 	DUAL_ROLE_ATTR(pdo1),
@@ -60,7 +61,6 @@ static struct device_attribute dual_role_attrs[] = {
 #endif
 #ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
 	DUAL_ROLE_ATTR(moisture_en),
-	DUAL_ROLE_ATTR(moisture),
 #endif
 };
 
@@ -300,6 +300,11 @@ static char *vconn_supply_text[] = {
 };
 
 #ifdef CONFIG_LGE_USB
+/* Control */
+static char *control_text[] = {
+	"auto", "on"
+};
+
 /* CC */
 static char *cc_text[] = {
 	"Open", "Rp Default", "Rp 1.5A", "Rp 3.0A", "Rd", "Ra"
@@ -309,9 +314,6 @@ static char *cc_text[] = {
 #ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
 static char *moisture_en_text[] = {
 	"enable", "disable"
-};
-static char *moisture_text[] = {
-	"false", "true"
 };
 #endif
 
@@ -380,6 +382,14 @@ static ssize_t dual_role_show_property(struct device *dev,
 		else
 			return -EIO;
 #ifdef CONFIG_LGE_USB
+	} else if (off == DUAL_ROLE_PROP_CONTROL) {
+		BUILD_BUG_ON(DUAL_ROLE_PROP_CONTROL_TOTAL !=
+			     ARRAY_SIZE(control_text));
+		if (value < DUAL_ROLE_PROP_CONTROL_TOTAL)
+			return snprintf(buf, PAGE_SIZE, "%s\n",
+					control_text[value]);
+		else
+			return -EIO;
 	} else if (off == DUAL_ROLE_PROP_CC1 ||
 		   off == DUAL_ROLE_PROP_CC2) {
 		BUILD_BUG_ON(DUAL_ROLE_PROP_CC_TOTAL != ARRAY_SIZE(cc_text));
@@ -462,17 +472,11 @@ static ssize_t dual_role_show_property(struct device *dev,
 #endif
 #ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
 	} else if (off == DUAL_ROLE_PROP_MOISTURE_EN) {
-		BUILD_BUG_ON(DUAL_ROLE_PROP_MOISTURE_EN_TOTAL != ARRAY_SIZE(moisture_en_text));
+		BUILD_BUG_ON(DUAL_ROLE_PROP_MOISTURE_EN_TOTAL !=
+			ARRAY_SIZE(moisture_en_text));
 		if (value < DUAL_ROLE_PROP_MOISTURE_EN_TOTAL)
 			return snprintf(buf, PAGE_SIZE, "%s\n",
 					moisture_en_text[value]);
-		else
-			return -EIO;
-	} else if (off == DUAL_ROLE_PROP_MOISTURE) {
-		BUILD_BUG_ON(DUAL_ROLE_PROP_MOISTURE_TOTAL != ARRAY_SIZE(moisture_text));
-		if (value < DUAL_ROLE_PROP_MOISTURE_TOTAL)
-			return snprintf(buf, PAGE_SIZE, "%s\n",
-					moisture_text[value]);
 		else
 			return -EIO;
 #endif
@@ -511,14 +515,17 @@ static ssize_t dual_role_store_property(struct device *dev,
 		value = result;
 		if (!ret)
 			goto setprop;
+		break;
+#ifdef CONFIG_LGE_USB
+	case DUAL_ROLE_PROP_CONTROL:
+		total = DUAL_ROLE_PROP_CONTROL_TOTAL;
+		text_array = control_text;
+		break;
+#endif
 #ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
 	case DUAL_ROLE_PROP_MOISTURE_EN:
 		total = DUAL_ROLE_PROP_MOISTURE_EN_TOTAL;
-        text_array = moisture_en_text;
-		break;
-	case DUAL_ROLE_PROP_MOISTURE:
-		total = DUAL_ROLE_PROP_MOISTURE_TOTAL;
-        text_array = moisture_text;
+		text_array = moisture_en_text;
 		break;
 #endif
 	default:

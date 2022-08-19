@@ -54,6 +54,9 @@
 #define DFPS_DATA_MAX_FPS 0x7fffffff
 #define DFPS_DATA_MAX_CLK_RATE 250000
 
+#if defined(CONFIG_LGE_DISPLAY_COMMON)
+extern int lge_mdss_post_1st_kickoff(struct msm_fb_data_type *mfd);
+#endif
 static int mdss_mdp_overlay_free_fb_pipe(struct msm_fb_data_type *mfd);
 static int mdss_mdp_overlay_fb_parse_dt(struct msm_fb_data_type *mfd);
 static int mdss_mdp_overlay_off(struct msm_fb_data_type *mfd);
@@ -5783,6 +5786,9 @@ static int mdss_mdp_overlay_on(struct msm_fb_data_type *mfd)
 		if (mfd->panel_info->type != WRITEBACK_PANEL) {
 			atomic_inc(&mfd->mdp_sync_pt_data.commit_cnt);
 			rc = mdss_mdp_overlay_kickoff(mfd, NULL);
+#if defined(CONFIG_LGE_DISPLAY_COMMON)
+			lge_mdss_post_1st_kickoff(mfd);
+#endif
 		}
 	} else {
 		rc = mdss_mdp_ctl_setup(ctl);
@@ -6510,6 +6516,9 @@ int mdss_mdp_overlay_init(struct msm_fb_data_type *mfd)
 #if defined(CONFIG_LGE_DISPLAY_COMMON)
 	mdp5_interface->panel_reg_backup = mdss_mdp_panel_reg_backup;
 #endif
+
+
+
 
 	/*
 	 * Register footswitch control only for primary fb pm

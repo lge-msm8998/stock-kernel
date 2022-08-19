@@ -53,14 +53,16 @@ static int broadcast_tdmb_open(void)
 
 static int broadcast_tdmb_close(void)
 {
+    int rc = ERROR;
     device_drv->broadcast_drv_if_user_stop(0);
-    return OK;
+    rc = device_drv->broadcast_drv_if_stop();
+    return rc;
 }
 
 static int broadcast_tdmb_set_channel(void __user *arg)
 {
     int rc = ERROR;
-    struct broadcast_tdmb_set_ch_info udata = {0, };
+    struct broadcast_tdmb_set_ch_info udata;
 
     if(copy_from_user(&udata, arg, sizeof(struct broadcast_tdmb_set_ch_info)))
     {
@@ -477,7 +479,11 @@ EXPORT_SYMBOL(broadcast_tdmb_blt_open);
 
 int8 broadcast_tdmb_blt_close(void)
 {
-    return OK;
+    int rc = ERROR;
+
+    rc = device_drv->broadcast_drv_if_stop();
+
+    return rc;
 }
 EXPORT_SYMBOL(broadcast_tdmb_blt_close);
 

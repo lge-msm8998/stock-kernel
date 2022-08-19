@@ -339,7 +339,7 @@ bool mmc_host_may_gate_card(struct mmc_card *card)
 }
 #endif
 
-#ifdef CONFIG_MACH_LGE
+#ifdef CONFIG_LGE_SHOW_SDCARD_DETECT_PIN_STATUS
 static ssize_t cd_status_show(struct device *dev,
         struct device_attribute *attr, char *buf)
 {
@@ -920,9 +920,8 @@ int mmc_add_host(struct mmc_host *host)
 #ifdef CONFIG_DEBUG_FS
 	mmc_add_host_debugfs(host);
 #endif
-#ifdef CONFIG_MACH_LGE
-	if (!(host->caps & MMC_CAP_NONREMOVABLE))
-	    mmc_host_cd_status_sysfs_init(host);
+#ifdef CONFIG_LGE_SHOW_SDCARD_DETECT_PIN_STATUS
+    mmc_host_cd_status_sysfs_init(host);
 #endif
 	mmc_host_clk_sysfs_init(host);
 	mmc_trace_init(host);

@@ -14,6 +14,7 @@
 
 #include <linux/of_gpio.h>
 #include "../mdss_dsi.h"
+#include "../mdss_fb.h"
 #include "lge_mdss_dsi.h"
 #include <soc/qcom/lge/board_lge.h>
 
@@ -23,35 +24,35 @@ static int lge_mdss_dsi_parse_gpio_params(struct platform_device *ctrl_pdev,
 	int rc, i;
 	const char *name;
 	char buf[256];
-	struct lge_mdss_dsi_ctrl_pdata *lge_ctrl_pdata = ctrl_pdata->lge_ctrl_pdata;
+	struct lge_mdss_dsi_ctrl_pdata *lge_extra = &(ctrl_pdata->lge_extra);
 
 	rc = of_property_count_strings(ctrl_pdev->dev.of_node,
 					"lge,extra-gpio-names");
 	if (rc > 0) {
-		lge_ctrl_pdata->num_gpios = rc;
+		lge_extra->num_gpios = rc;
 		pr_info("%s: num_gpios=%d\n", __func__,
-				lge_ctrl_pdata->num_gpios);
-		lge_ctrl_pdata->gpio_array = kmalloc(sizeof(struct lge_gpio_entry) *
-				lge_ctrl_pdata->num_gpios, GFP_KERNEL);
-		if (NULL == lge_ctrl_pdata->gpio_array) {
+				lge_extra->num_gpios);
+		lge_extra->gpio_array = kmalloc(sizeof(struct lge_gpio_entry) *
+				lge_extra->num_gpios, GFP_KERNEL);
+		if (NULL == lge_extra->gpio_array) {
 			pr_err("%s: no memory\n", __func__);
-			lge_ctrl_pdata->num_gpios = 0;
+			lge_extra->num_gpios = 0;
 			return -ENOMEM;
 		}
-		for (i = 0; i < lge_ctrl_pdata->num_gpios; ++i) {
+		for (i = 0; i < lge_extra->num_gpios; ++i) {
 			of_property_read_string_index(ctrl_pdev->dev.of_node,
 					"lge,extra-gpio-names", i, &name);
-			strlcpy(lge_ctrl_pdata->gpio_array[i].name, name,
-			     sizeof(lge_ctrl_pdata->gpio_array[i].name));
+			strlcpy(lge_extra->gpio_array[i].name, name,
+			     sizeof(lge_extra->gpio_array[i].name));
 			snprintf(buf, sizeof(buf), "lge,gpio-%s", name);
-			lge_ctrl_pdata->gpio_array[i].gpio =
+			lge_extra->gpio_array[i].gpio =
 			      of_get_named_gpio(ctrl_pdev->dev.of_node, buf, 0);
 			if (!gpio_is_valid(
-				lge_ctrl_pdata->gpio_array[i].gpio))
+				lge_extra->gpio_array[i].gpio))
 				pr_err("%s: %s not specified\n", __func__, buf);
 		}
 	} else {
-		lge_ctrl_pdata->num_gpios = 0;
+		lge_extra->num_gpios = 0;
 		pr_info("%s: no lge specified gpio\n", __func__);
 	}
 	return 0;
@@ -69,17 +70,17 @@ void lge_extra_gpio_set_value(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 			const char *name, int value)
 {
 	int i, index = -1;
-	struct lge_mdss_dsi_ctrl_pdata *lge_ctrl_pdata = ctrl_pdata->lge_ctrl_pdata;
+	struct lge_mdss_dsi_ctrl_pdata *lge_extra = &(ctrl_pdata->lge_extra);
 
-	for (i = 0; i < lge_ctrl_pdata->num_gpios; ++i) {
-		if (!strcmp(lge_ctrl_pdata->gpio_array[i].name, name)) {
+	for (i = 0; i < lge_extra->num_gpios; ++i) {
+		if (!strcmp(lge_extra->gpio_array[i].name, name)) {
 			index = i;
 			break;
 		}
 	}
 
 	if (index != -1) {
-		gpio_set_value(lge_ctrl_pdata->gpio_array[index].gpio,
+		gpio_set_value(lge_extra->gpio_array[index].gpio,
 				value);
 	} else {
 		pr_err("%s: couldn't get gpio by name %s\n", __func__, name);
@@ -89,10 +90,10 @@ void lge_extra_gpio_set_value(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 int lge_get_extra_gpio(struct mdss_dsi_ctrl_pdata *ctrl_pdata, const char* name)
 {
 	int i;
-	struct lge_mdss_dsi_ctrl_pdata *lge_ctrl_pdata = ctrl_pdata->lge_ctrl_pdata;
-	for (i = 0; i < lge_ctrl_pdata->num_gpios; ++i) {
-		if (!strcmp(lge_ctrl_pdata->gpio_array[i].name, name)) {
-			return lge_ctrl_pdata->gpio_array[i].gpio;
+	struct lge_mdss_dsi_ctrl_pdata *lge_extra = &(ctrl_pdata->lge_extra);
+	for (i = 0; i < lge_extra->num_gpios; ++i) {
+		if (!strcmp(lge_extra->gpio_array[i].name, name)) {
+			return lge_extra->gpio_array[i].gpio;
 		}
 	}
 	return -EINVAL;
@@ -132,4 +133,14 @@ int detect_qem_factory_cable(void)
 	}
 
 	return factory_cable;
+}
+
+int __weak lge_mdss_post_1st_kickoff(struct msm_fb_data_type *mfd)
+{
+	return 0;
+}
+
+void __weak lge_mdss_post_dsi_event_handler(struct mdss_dsi_ctrl_pdata *ctrl, int event, void *arg, int *rc)
+{
+	return;
 }

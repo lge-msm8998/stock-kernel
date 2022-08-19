@@ -93,17 +93,6 @@
 		lge,internal-test-command-power-set3 = [05 01 00 00 14 00 02 29 00];
 		lge,memory-error-detect-command = [05 01 00 00 14 00 02 29 00];
 		lge,esd-detect-command = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-2500K = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-3000K = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-3500K = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-4000K = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-4500K = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-5000K = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-5500K = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-6000K = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-6500K = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-7000K = [05 01 00 00 14 00 02 29 00];
-		lge,digital-gamma-cmds-dummy = [05 01 00 00 14 00 02 29 00];
 
 		qcom,mdss-dsi-on-command-state = "dsi_lp_mode";
 		qcom,mdss-dsi-off-command-state = "dsi_lp_mode";

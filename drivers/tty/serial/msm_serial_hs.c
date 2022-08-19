@@ -3239,6 +3239,7 @@ static void msm_hs_pm_suspend(struct device *dev)
 			MSM_HS_ERR("%s():Error selecting pinctrl suspend state",
 				__func__);
 	}
+
 	if (!atomic_read(&msm_uport->client_req_state))
 		enable_wakeup_interrupt(msm_uport);
 	LOG_USR_MSG(msm_uport->ipc_msm_hs_pwr_ctxt,

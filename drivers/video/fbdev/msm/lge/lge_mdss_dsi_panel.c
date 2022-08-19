@@ -19,471 +19,344 @@
 #include "lge_mdss_dsi_panel.h"
 #include <linux/delay.h>
 
-#if defined(CONFIG_LGE_DISPLAY_CONTROL)
-#include "lge_display_control.h"
-#if defined(CONFIG_LGE_DISPLAY_COMFORT_MODE)
-#include "lge_comfort_view.h"
-#endif
-#endif
-#if defined(CONFIG_LGE_DISPLAY_AMBIENT_SUPPORTED)
-#include "lge_mdss_ambient.h"
-#endif /* CONFIG_LGE_DISPLAY_AMBIENT_SUPPORTED */
-#if defined(CONFIG_LGE_DISPLAY_ERROR_DETECT)
-#include "lge_error_detect.h"
-#endif
-
-struct mdss_panel_data *pdata_base;
-
-char *lge_blmap_name[] = {
-	"lge,blmap",
-#if defined(CONFIG_LGE_HIGH_LUMINANCE_MODE)
-	"lge,blmap-hl",
-#endif /* CONFIG_LGE_HIGH_LUMINANCE_MODE */
-#if defined(CONFIG_LGE_DISPLAY_CONTROL)
-#if defined(CONFIG_LGE_DISPLAY_VIDEO_ENHANCEMENT)
-	"lge,blmap-ve",
-#endif /* CONFIG_LGE_DISPLAY_VIDEO_ENHANCEMENT */
-#endif /* CONFIG_LGE_DISPLAY_CONTROL */
-#if defined(CONFIG_LGE_DISPLAY_AMBIENT_SUPPORTED)
-	"lge,blmap-ex",
-#endif /* CONFIG_LGE_DISPLAY_AMBIENT_SUPPORTED */
+#undef MODULE_PARAM_PREFIX
+#define MODULE_PARAM_PREFIX "lge."
+int panel_not_connected = 0;
+static int param_set_panel_not_connected(const char *val, const struct kernel_param *kp)
+{
+	unsigned long buf;
+	int ret = kstrtoul(val, 0, &buf);
+	if (ret)
+		return ret;
+	if (buf)
+		panel_not_connected = 1;
+	return 0;
+}
+static int param_get_panel_not_connected(char *buf, const struct kernel_param *kp)
+{
+	return scnprintf(buf, PAGE_SIZE-1, "%d", panel_not_connected);
+}
+static struct kernel_param_ops panel_not_connected_ops = {
+	.set = param_set_panel_not_connected,
+	.get = param_get_panel_not_connected,
 };
-
-#if defined(CONFIG_LGE_DISPLAY_COMMON)
-extern int panel_not_connected;
-#endif /* CONFIG_LGE_DISPLAY_COMMON*/
+module_param_cb(pinit_fail, &panel_not_connected_ops, NULL, S_IRUGO);
 
 extern int mdss_dsi_parse_dcs_cmds(struct device_node *np,
 		struct dsi_panel_cmds *pcmds, char *cmd_key, char *link_key);
 extern void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 		struct dsi_panel_cmds *pcmds, u32 flags);
 
-void lge_mdss_dsi_parse_dcs_cmds_by_name_array(struct device_node *np,
-		struct lge_dsi_cmds_entry **lge_dsi_cmds_list,
-		char *cmd_name_array[],
-		int num_cmds)
+int lge_mdss_panel_parse_dt_extra_cmds(struct device_node *np,
+		struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
-	int i, rc = 0;
-	char *name;
-	char cmd_state[128];
-	struct lge_dsi_cmds_entry *cmds_list = NULL;
-
-	if (np == NULL || num_cmds == 0 || cmd_name_array == NULL) {
-		pr_err("Invalid input\n");
-		return;
-	}
-
-	if (*lge_dsi_cmds_list == NULL) {
-		cmds_list = kzalloc(sizeof(struct lge_dsi_cmds_entry) *	num_cmds, GFP_KERNEL);
-		*lge_dsi_cmds_list = cmds_list;
-	} else {
-		pr_err("This cmd list is already allocated.\n");
-		return;
-	}
-
-	if (cmds_list == NULL) {
-		pr_err("no memory\n");
-		return;
-	}
-
-	for (i = 0; i < num_cmds; ++i) {
-		name = cmd_name_array[i];
-		strlcpy(cmds_list[i].name, name,
-						sizeof(cmds_list[i].name));
-		strlcpy(cmd_state, name, sizeof(cmd_state));
-		strcat(cmd_state, "-state");
-		pr_info("name : %s, cmd state : %s\n", name, cmd_state);
-		rc = mdss_dsi_parse_dcs_cmds(np,	&cmds_list[i].lge_dsi_cmds, name, cmd_state);
-		if (!rc)
-			pr_info("lge_dsi_cmds_list[%d].lge_dsi_cmds : 0x%02x\n", i, cmds_list[i].lge_dsi_cmds.cmds[0].payload[0]);
-	}
-}
-
-void lge_mdss_dsi_send_dcs_cmds_list(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
-				struct lge_dsi_cmds_entry *lge_dsi_cmds_list, int num_cmds)
-{
+	int rc;
 	int i;
-	for (i = 0; i < num_cmds ; i++) {
-		if (lge_dsi_cmds_list[i].lge_dsi_cmds.cmd_cnt)
-			mdss_dsi_panel_cmds_send(ctrl_pdata,
-							&lge_dsi_cmds_list[i].lge_dsi_cmds,
-							CMD_REQ_COMMIT);
-	}
-}
+	const char *name;
+	char buf1[256];
+	char buf2[256];
 
-void lge_mdss_dsi_send_dcs_cmds_by_cmd_name(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
-				struct lge_dsi_cmds_entry *lge_dsi_cmds_list, int num_cmds, const char *cmd_name)
-{
-	int i, index = -1;
-	for (i = 0; i < num_cmds; ++i) {
-		if (!strcmp(lge_dsi_cmds_list[i].name, cmd_name)) {
-			index = i;
-			break;
+	rc = of_property_count_strings(np, "lge,mdss-dsi-extra-command-names");
+	if (rc > 0) {
+		ctrl_pdata->lge_extra.num_extra_cmds = rc;
+		pr_info("num_extra_cmds=%d\n", ctrl_pdata->lge_extra.num_extra_cmds);
+		ctrl_pdata->lge_extra.extra_cmds_array = kmalloc(sizeof(struct lge_dsi_cmds_entry)*ctrl_pdata->lge_extra.num_extra_cmds, GFP_KERNEL);
+		if (NULL == ctrl_pdata->lge_extra.extra_cmds_array) {
+			pr_err("no memory\n");
+			ctrl_pdata->lge_extra.num_extra_cmds = 0;
+			return -ENOMEM;
 		}
-	}
+		for (i = 0; i < ctrl_pdata->lge_extra.num_extra_cmds; i++) {
+			of_property_read_string_index(np, "lge,mdss-dsi-extra-command-names", i, &name);
+			pr_info("%s\n", name);
+			strlcpy(ctrl_pdata->lge_extra.extra_cmds_array[i].name, name, sizeof(ctrl_pdata->lge_extra.extra_cmds_array[i].name));
+			snprintf(buf1, sizeof(buf1), "lge,mdss-dsi-extra-command-%s", name);
+			snprintf(buf2, sizeof(buf2), "lge,mdss-dsi-extra-command-state-%s", name);
+			mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->lge_extra.extra_cmds_array[i].lge_dsi_cmds, buf1, buf2);
+		}
 
-	if (index != -1) {
-		if (lge_dsi_cmds_list[index].lge_dsi_cmds.cmd_cnt)
-			mdss_dsi_panel_cmds_send(ctrl_pdata,
-							&lge_dsi_cmds_list[index].lge_dsi_cmds,
-							CMD_REQ_COMMIT);
 	} else {
-		pr_err("cmds %s not found\n", cmd_name);
+		ctrl_pdata->lge_extra.num_extra_cmds = 0;
 	}
-}
 
-#if defined(CONFIG_LGE_DISPLAY_BIST_MODE)
-int lge_mdss_dsi_bist_ctrl(struct mdss_dsi_ctrl_pdata *ctrl, bool enable)
-{
-	if (enable) {
-		if (ctrl->bist_on == 0) {
-			mdss_dsi_panel_cmds_send(ctrl,
-				&ctrl->bist_on_cmds,
-				CMD_REQ_COMMIT);
-		}
-		ctrl->bist_on++;
-	} else {
-		if (ctrl->bist_on == 1) {
-			mdss_dsi_panel_cmds_send(ctrl,
-				&ctrl->bist_off_cmds,
-				CMD_REQ_COMMIT);
-		}
-		ctrl->bist_on--;
-		if (ctrl->bist_on < 0) {
-			pr_err("count (%d) -> (0) : debugging!\n", ctrl->bist_on);
-			ctrl->bist_on = 0;
-		}
-	}
-	pr_info("count(%d)\n", ctrl->bist_on);
 	return 0;
 }
 
-void lge_mdss_dsi_bist_release(struct mdss_dsi_ctrl_pdata *ctrl)
+struct dsi_panel_cmds *lge_get_extra_cmds_by_name(struct mdss_dsi_ctrl_pdata *ctrl_pdata, char *name)
 {
-	if (ctrl->bist_on > 0) {
-		ctrl->bist_on = 1;
-		if (lge_mdss_dsi_bist_ctrl(ctrl, false) < 0) {
-			pr_warn("fail to bist control\n");
-		}
+	int i;
+	if (ctrl_pdata == NULL) {
+		pr_err("ctrl_pdata is NULL\n");
+		return NULL;
 	}
-	pr_info("%d\n", ctrl->bist_on);
+
+	for (i = 0; i < ctrl_pdata->lge_extra.num_extra_cmds; ++i) {
+		if (!strcmp(ctrl_pdata->lge_extra.extra_cmds_array[i].name, name))
+			return &ctrl_pdata->lge_extra.extra_cmds_array[i].lge_dsi_cmds;
+	}
+	return NULL;
 }
-#endif
 
-char lge_dcs_cmd[2] = {0x00, 0x00}; /* DTYPE_DCS_READ */
-struct dsi_cmd_desc lge_dcs_read_cmd = {
-	{DTYPE_DCS_READ, 1, 0, 1, 1, sizeof(lge_dcs_cmd)},
-	lge_dcs_cmd
-};
-
-int lge_mdss_dsi_panel_cmd_read(char cmd0, int cnt, char* ret_buf)
+void lge_send_extra_cmds_by_name(struct mdss_dsi_ctrl_pdata *ctrl_pdata, char *name)
 {
-	struct dcs_cmd_req cmdreq;
-	struct mdss_dsi_ctrl_pdata *ctrl;
-	char rx_buf[128] = {0x0};
-	int i = 0;
-	int checksum = 0;
-	int ret = 0;
-
-	if(panel_not_connected) {
-		pr_err("Skip Panel Cmd Read : Panel not connected.\n");
-		return -EINVAL;
-	}
-
-	if (pdata_base == NULL) {
-		pr_err("Invalid input data\n");
-		return -EINVAL;
-	}
-
-	ctrl = container_of(pdata_base, struct mdss_dsi_ctrl_pdata,
-						panel_data);
-	lge_dcs_cmd[0] = cmd0;
-	memset(&cmdreq, 0, sizeof(cmdreq));
-	cmdreq.cmds = &lge_dcs_read_cmd;
-	cmdreq.cmds_cnt = 1;
-	cmdreq.flags = CMD_REQ_RX | CMD_REQ_COMMIT;
-	cmdreq.rlen = cnt;
-	cmdreq.cb = NULL;
-	cmdreq.rbuf = rx_buf;
-
-	if (ctrl->status_cmds.link_state == DSI_LP_MODE)
-		cmdreq.flags |= CMD_REQ_LP_MODE;
-	else if (ctrl->status_cmds.link_state == DSI_HS_MODE)
-		cmdreq.flags |= CMD_REQ_HS_MODE;
-
-	mdelay(1);
-
-	if(!mdss_dsi_cmdlist_put(ctrl, &cmdreq)) {
-		pr_err("Panel Command Read Failed!\n");
-		return -EAGAIN;
-	}
-
-	for (i = 0; i < cnt; i++)
-		checksum += rx_buf[i];
-
-	if (checksum == 0) {
-		pr_err("[Reg:0x%x] All data is zero\n", cmd0);
+	struct dsi_panel_cmds *pcmds = lge_get_extra_cmds_by_name(ctrl_pdata, name);
+	if (pcmds) {
+		mdss_dsi_panel_cmds_send(ctrl_pdata, pcmds, CMD_REQ_COMMIT);
 	} else {
-		pr_info("[Reg:0x%x] checksum (%d)\n", cmd0, checksum);
-		for (i = 0; i < cnt; i++) {
-			pr_debug("Reg[0x%x], buf[%d]=0x%x\n", cmd0, i, rx_buf[i]);
-		}
+		pr_err("unsupported cmds: %s\n", name);
 	}
-
-	memcpy(ret_buf, rx_buf, cnt);
-
-	return ret;
-}
-
-char *lge_get_blmapname(enum lge_bl_map_type  blmaptype)
-{
-	if (blmaptype >= 0 && blmaptype < LGE_BLMAPMAX)
-		return lge_blmap_name[blmaptype];
-	else
-		return lge_blmap_name[LGE_BLDFT];
 }
 
 void lge_mdss_panel_parse_dt_blmaps(struct device_node *np,
 				   struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
-	int i, j, rc;
-	u32 *array;
-	struct mdss_panel_info *pinfo = &(ctrl_pdata->panel_data.panel_info);
+	const char *name;
+	int i, rc;
 
-	pinfo->blmap_size = 256;
-	array = kzalloc(sizeof(u32) * pinfo->blmap_size, GFP_KERNEL);
-
-	if (!array)
-		return;
-
-	for (i = 0; i < LGE_BLMAPMAX; i++) {
-		/* check if property exists */
-		if (!of_find_property(np, lge_blmap_name[i], NULL))
-			continue;
-
-		pr_info("found %s\n", lge_blmap_name[i]);
-
-		rc = of_property_read_u32_array(np, lge_blmap_name[i], array,
-						pinfo->blmap_size);
-		if (rc) {
-			pr_err("%d, unable to read %s\n", __LINE__, lge_blmap_name[i]);
+	rc = of_property_count_strings(np, "lge,blmap-list");
+	if (rc > 0) {
+		ctrl_pdata->lge_extra.blmap_list_size = rc;
+		pr_info("blmap_list_size=%d\n", ctrl_pdata->lge_extra.blmap_list_size);
+		ctrl_pdata->lge_extra.blmap_list = kzalloc(sizeof(char*) * ctrl_pdata->lge_extra.blmap_list_size, GFP_KERNEL);
+		ctrl_pdata->lge_extra.blmap = kzalloc(sizeof(int*) * ctrl_pdata->lge_extra.blmap_list_size, GFP_KERNEL);
+		ctrl_pdata->lge_extra.blmap_size = kzalloc(sizeof(int) * ctrl_pdata->lge_extra.blmap_list_size, GFP_KERNEL);
+		if (NULL == ctrl_pdata->lge_extra.blmap_list || NULL == ctrl_pdata->lge_extra.blmap || NULL == ctrl_pdata->lge_extra.blmap_size) {
+			pr_err("allocation failed\n");
+			ctrl_pdata->lge_extra.blmap_list_size = 0;
 			goto error;
 		}
-
-		pinfo->blmap[i] = kzalloc(sizeof(int) * pinfo->blmap_size,
-				GFP_KERNEL);
-
-		if (!pinfo->blmap[i]){
-			goto error;
+		for (i = 0; i < ctrl_pdata->lge_extra.blmap_list_size; i++) {
+			of_property_read_string_index(np, "lge,blmap-list", i, &name);
+			pr_info("%s\n", name);
+			ctrl_pdata->lge_extra.blmap_list[i] = kzalloc(strlen(name)+1, GFP_KERNEL);
+			if (NULL == ctrl_pdata->lge_extra.blmap_list[i]) {
+				pr_err("allocation for blmap name %s failed\n", name);
+				goto error;
+			}
+			strcpy(ctrl_pdata->lge_extra.blmap_list[i], name);
+			pr_info("%s\n", ctrl_pdata->lge_extra.blmap_list[i]);
+			if (of_find_property(np, name, &ctrl_pdata->lge_extra.blmap_size[i])) {
+				ctrl_pdata->lge_extra.blmap_size[i] /= sizeof(u32);
+				ctrl_pdata->lge_extra.blmap[i] = kzalloc(sizeof(int) * ctrl_pdata->lge_extra.blmap_size[i], GFP_KERNEL);
+				pr_info("blmap_size for blmap %s = %d\n", name, ctrl_pdata->lge_extra.blmap_size[i]);
+				if (NULL == ctrl_pdata->lge_extra.blmap[i]) {
+					pr_err("allocation for blmap %s failed\n", name);
+					goto error;
+				}
+				if (of_property_read_u32_array(np, name, ctrl_pdata->lge_extra.blmap[i], ctrl_pdata->lge_extra.blmap_size[i])) {
+					pr_err("parsing %s failed\n", name);
+					kfree(ctrl_pdata->lge_extra.blmap[i]);
+					ctrl_pdata->lge_extra.blmap[i] = NULL;
+				}
+			} else {
+				ctrl_pdata->lge_extra.blmap_size[i] = 0;
+				ctrl_pdata->lge_extra.blmap[i] = NULL;
+			}
 		}
-
-		for (j = 0; j < pinfo->blmap_size; j++)
-			pinfo->blmap[i][j] = array[j];
+	} else {
+		ctrl_pdata->lge_extra.blmap_list_size = 0;
 	}
-
-	kfree(array);
 	return;
 
 error:
-	for (i = 0; i < LGE_BLMAPMAX; i++)
-		if (pinfo->blmap[i])
-			kfree(pinfo->blmap[i]);
-	kfree(array);
+	for (i = 0; i < ctrl_pdata->lge_extra.blmap_list_size; ++i) {
+		if (ctrl_pdata->lge_extra.blmap_list[i]) {
+			kfree(ctrl_pdata->lge_extra.blmap_list[i]);
+			ctrl_pdata->lge_extra.blmap_list[i] = NULL;
+		}
+		if (ctrl_pdata->lge_extra.blmap[i]) {
+			kfree(ctrl_pdata->lge_extra.blmap[i]);
+			ctrl_pdata->lge_extra.blmap[i] = NULL;
+		}
+	}
+	if (ctrl_pdata->lge_extra.blmap_list) {
+		kfree(ctrl_pdata->lge_extra.blmap_list);
+		ctrl_pdata->lge_extra.blmap_list = NULL;
+	}
+	if (ctrl_pdata->lge_extra.blmap) {
+		kfree(ctrl_pdata->lge_extra.blmap);
+		ctrl_pdata->lge_extra.blmap = NULL;
+	}
+	if (ctrl_pdata->lge_extra.blmap_size) {
+		kfree(ctrl_pdata->lge_extra.blmap_size);
+		ctrl_pdata->lge_extra.blmap_size = NULL;
+	}
+	ctrl_pdata->lge_extra.blmap_list_size = 0;
 }
 
-static int lge_mdss_dsi_panel_create_sysfs(struct lge_mdss_dsi_ctrl_pdata *lge_ctrl_pdata)
+static int find_blmap_index_by_name(struct mdss_dsi_ctrl_pdata *ctrl_pdata, const char *name)
 {
-	int rc = 0;
-	static struct class *panel = NULL;
-	if (!panel) {
-		panel = class_create(THIS_MODULE, "panel");
-		if (IS_ERR(panel)) {
-			pr_err("Failed to create panel class\n");
-			return -EINVAL;
+	int index = -1;
+	int i;
+
+	for (i = 0; i < ctrl_pdata->lge_extra.blmap_list_size; ++i) {
+		if (ctrl_pdata->lge_extra.blmap_list[i] && !strncmp(ctrl_pdata->lge_extra.blmap_list[i], name, strlen(name))) {
+			index = i;
+			break;
 		}
- 	}
-
-	if (lge_ctrl_pdata != NULL && lge_ctrl_pdata->create_panel_sysfs) {
-		rc = lge_ctrl_pdata->create_panel_sysfs(panel);
-		if (rc < 0)
-			pr_err("Panel-dependent sysfs creation failed\n");
 	}
+	if (index == -1)
+		pr_err("index of blmap %s not found, blmap_list_size=%d\n", name, ctrl_pdata->lge_extra.blmap_list_size);
+	return index;
+}
 
-#if defined(CONFIG_LGE_DISPLAY_CONTROL)
-	if ((rc = lge_display_control_create_sysfs(panel)) < 0) {
-		pr_err("fail to create display control sysfs\n");
- 	}
-#endif /* CONFIG_LGE_DISPLAY_CONTROL */
-#if defined(CONFIG_LGE_DISPLAY_ERROR_DETECT)
-	if ((rc = lge_dsi_err_detect_create_sysfs(panel)) < 0) {
-		pr_err("fail to create error detect sysfs\n");
- 	}
-#endif /* CONFIG_LGE_DISPLAY_ERROR_DETECT */
-#if defined(CONFIG_LGE_DISPLAY_AMBIENT_SUPPORTED)
-	if ((rc = lge_mdss_ambient_create_sysfs(panel)) < 0) {
-		pr_err("fail to create ambient sysfs\n");
- 	}
-#endif /* CONFIG_LGE_DISPLAY_AMBIENT_SUPPORTED */
-	return rc;
+static int lge_mdss_panel_parse_mplus_dt(struct device_node *np,
+						struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+	const char *name;
+	int i, rc;
+
+	ctrl_pdata->lge_extra.mp_to_blmap_tbl = NULL;
+	ctrl_pdata->lge_extra.mp_to_blmap_tbl_size = 0;
+
+	ctrl_pdata->lge_extra.use_mplus =
+		LGE_DDIC_OP_CHECK(ctrl_pdata, mplus_mode_set)
+		&& LGE_DDIC_OP_CHECK(ctrl_pdata, mplus_mode_get)
+		&& LGE_DDIC_OP_CHECK(ctrl_pdata, mplus_max_set)
+		&& LGE_DDIC_OP_CHECK(ctrl_pdata, mplus_max_get)
+		&& LGE_DDIC_OP_CHECK(ctrl_pdata, mplus_hd_set)
+		&& LGE_DDIC_OP_CHECK(ctrl_pdata, mplus_hd_get);
+
+	if (!ctrl_pdata->lge_extra.use_mplus)
+		return 0;
+
+	rc = of_property_count_strings(np, "lge,blmap-for-mplus-mode");
+	if (rc > 0) {
+		ctrl_pdata->lge_extra.mp_to_blmap_tbl_size = rc;
+		pr_info("mp_to_blmap_tbl_size=%d\n", ctrl_pdata->lge_extra.mp_to_blmap_tbl_size);
+		ctrl_pdata->lge_extra.mp_to_blmap_tbl = kzalloc(sizeof(int) * ctrl_pdata->lge_extra.blmap_list_size, GFP_KERNEL);
+		if (NULL == ctrl_pdata->lge_extra.mp_to_blmap_tbl) {
+			pr_err("allocation failed\n");
+			ctrl_pdata->lge_extra.use_mplus = false;
+			ctrl_pdata->lge_extra.mp_to_blmap_tbl_size = 0;
+			return -ENOMEM;
+		}
+		for (i = 0; i < ctrl_pdata->lge_extra.mp_to_blmap_tbl_size; i++) {
+			of_property_read_string_index(np, "lge,blmap-for-mplus-mode", i, &name);
+			pr_info("%s\n", name);
+			ctrl_pdata->lge_extra.mp_to_blmap_tbl[i] = find_blmap_index_by_name(ctrl_pdata, name);
+		}
+	} else {
+		pr_err("lge,blmap-for-mplus-mode not exist");
+		ctrl_pdata->lge_extra.use_mplus = false;
+	}
+	return 0;
 }
 
 static int lge_mdss_panel_parse_dt(struct device_node *np,
 						struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
-	struct lge_mdss_dsi_ctrl_pdata *lge_ctrl_pdata = NULL;
+	struct lge_mdss_dsi_ctrl_pdata *lge_extra;
+	int rc = 0;
+	u32 tmp = 0;
+	const char *data;
 
 	if (np == NULL || ctrl_pdata == NULL) {
 		pr_err("Invalid input\n");
 		return -EINVAL;
 	}
 
-	lge_ctrl_pdata = ctrl_pdata->lge_ctrl_pdata;
+	lge_extra = &(ctrl_pdata->lge_extra);
 
-	if (lge_ctrl_pdata == NULL) {
-		pr_err("Invalid pdata state\n");
-		return -EINVAL;
+	rc = of_property_read_u32(np, "lge,panel-id", &tmp);
+	if(!rc && tmp >=0 && tmp <= 7) {
+		lge_extra->panel_id = tmp;
+	} else {
+		pr_info("failed to parse panel_id rc=%d, tmp=%d\n", rc, tmp);
 	}
 
-	if (lge_ctrl_pdata->parse_dt_blmaps)
-		lge_ctrl_pdata->parse_dt_blmaps(np, ctrl_pdata);
-	else
-		lge_mdss_panel_parse_dt_blmaps(np, ctrl_pdata);
+	data = of_get_property(np, "lge,panel-type", NULL);
+	if (data) {
+		snprintf(lge_extra->panel_type, sizeof(lge_extra->panel_type), data);
+	} else {
+		snprintf(lge_extra->panel_type, sizeof(lge_extra->panel_type), "UNDEFINED");
+		pr_err("panel_type not specified\n");
+	}
 
-	if (lge_ctrl_pdata->parse_dt_panel_ctrl)
-		lge_ctrl_pdata->parse_dt_panel_ctrl(np, ctrl_pdata);
+	rc = of_property_read_u32(np, "lge,boost-brightness-criteria", &tmp);
+	if(!rc) {
+		lge_extra->boost_br_criteria = tmp;
+	} else {
+		lge_extra->boost_br_criteria = MDSS_MAX_BL_BRIGHTNESS;
+	}
+	pr_info("boost_br_criteria=%d\n", lge_extra->boost_br_criteria);
 
-#if defined(CONFIG_LGE_DISPLAY_CONTROL)
-	mdss_dsi_parse_display_control_dcs_cmds(np, ctrl_pdata);
-#endif /* CONFIG_LGE_DISPLAY_CONTROL*/
-#if defined(CONFIG_LGE_DISPLAY_ERROR_DETECT)
-	lge_dsi_err_detect_parse_dt(np, ctrl_pdata);
-#endif /* CONFIG_LGE_DISPLAY_ERROR_DETECT */
-#if defined(CONFIG_LGE_DISPLAY_BIST_MODE)
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->bist_on_cmds,
-			"lge,bist-on-cmds", "qcom,mode-control-dsi-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->bist_off_cmds,
-			"lge,bist-off-cmds", "qcom,mode-control-dsi-state");
-#endif
+	lge_mdss_panel_parse_dt_blmaps(np, ctrl_pdata);
+	lge_mdss_panel_parse_mplus_dt(np, ctrl_pdata);
+	lge_mdss_panel_parse_dt_extra_cmds(np, ctrl_pdata);
+
+	return 0;
+}
+
+int lge_ddic_feature_init(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+	if (ctrl_pdata == NULL)
+		return -ENODEV;
+
+	ctrl_pdata->lge_extra.mplus_hd = LGE_MP_OFF;
+	ctrl_pdata->lge_extra.mp_max = LGE_MP_OFF;
+	ctrl_pdata->lge_extra.mp_mode = LGE_MP_OFF;
+
+	ctrl_pdata->lge_extra.hdr_mode = 0;
+
 	return 0;
 }
 
 int lge_mdss_dsi_panel_init(struct device_node *node, struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
-	int rc = 0;
-	struct lge_mdss_dsi_ctrl_pdata *lge_ctrl_pdata = NULL;
-
-	if (ctrl_pdata->panel_data.panel_info.pdest == DISPLAY_1) {
-		if (pdata_base == NULL)
-			pdata_base = &(ctrl_pdata->panel_data);
-	}
-
-	lge_ctrl_pdata = kzalloc(sizeof(struct lge_mdss_dsi_ctrl_pdata), GFP_KERNEL);
-	if (!lge_ctrl_pdata) {
-		pr_err("Unable to alloc mem for lge_crtl_pdata\n");
-		rc = -ENOMEM;
-		goto mem_fail;
-	}
-
-	pr_err("ctrl_pdata = %p, lge_ctrl_pdata = %p\n", ctrl_pdata, lge_ctrl_pdata);
-	lge_ctrl_pdata->lge_blmap_list = lge_blmap_name;
-	ctrl_pdata->lge_ctrl_pdata = lge_ctrl_pdata;
-
-	/* This funciton should be defined under each model directory */
-	lge_mdss_dsi_panel_init_sub(lge_ctrl_pdata);
-
-#if defined(CONFIG_LGE_DISPLAY_CONTROL)
-	rc = lge_display_control_init(ctrl_pdata);
-	if (rc) {
-		pr_err("fail to init display control (rc:%d)\n", rc);
-		return rc;
-	}
-#endif /* CONFIG_LGE_DISPLAY_CONTROL */
-
-#if defined(CONFIG_LGE_DISPLAY_AMBIENT_SUPPORTED)
-	rc = lge_mdss_ambient_init(node, ctrl_pdata);
-	if (rc) {
-		pr_err("[Ambient] fail to init (rc:%d)\n", rc);
-		return rc;
-	}
-#endif
+	lge_ddic_ops_init(ctrl_pdata);
 
 	lge_mdss_panel_parse_dt(node, ctrl_pdata);
-	rc = lge_mdss_dsi_panel_create_sysfs(lge_ctrl_pdata);
-mem_fail:
-	return rc;
+
+	lge_ddic_feature_init(ctrl_pdata);
+	return 0;
 }
 
-int lge_mdss_dsi_panel_reg_backup(struct mdss_dsi_ctrl_pdata *ctrl) {
+/* deprecated
+ * TODO: remove this function
+ */
+int lge_mdss_dsi_panel_reg_backup(struct mdss_dsi_ctrl_pdata *ctrl)
+{
 	int ret = 0;
-	int ret_sub = 0;
-	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
-	struct lge_mdss_dsi_ctrl_pdata *lge_ctrl_pdata = NULL;
-
-	if (pdata_base == NULL) {
-		pr_err("%s: Invalid input data\n", __func__);
-		return -EINVAL;
-	}
-
-	ctrl_pdata = container_of(pdata_base, struct mdss_dsi_ctrl_pdata,
-				panel_data);
-
-	if (ctrl_pdata == NULL) {
-		pr_err("Invalid input\n");
-		return -EINVAL;
-	}
-
-	lge_ctrl_pdata = ctrl_pdata->lge_ctrl_pdata;
-
-	if (lge_ctrl_pdata == NULL) {
-		pr_err("Invalid pdata state\n");
-		return -EINVAL;
-	}
-
-#if defined(CONFIG_LGE_DISPLAY_BRIGHTNESS_DIMMING)
-	if (!lge_ctrl_pdata->bc_reg_backup_flag) {
-		ret_sub = lge_bc_dim_reg_backup(ctrl_pdata);
-		if (ret_sub < 0) {
-			pr_err("fail to backup BC CTRL REG : %d\n", ret_sub);
-		} else {
-			lge_ctrl_pdata->bc_reg_backup_flag = true;
-			lge_bc_dim_set(ctrl_pdata, BC_DIM_ON, BC_DIM_FRAMES_NORMAL);
-		}
-		ret += ret_sub;
-	}
-#endif
-
-#if defined(CONFIG_LGE_DISPLAY_COLOR_MANAGER)
-	if (!lge_ctrl_pdata->is_backup) {
-		ret_sub = lge_color_manager_reg_backup(ctrl_pdata);
-		if (ret_sub < 0)
-			pr_err("fail to backup CM REG : %d\n", ret_sub);
-		else
-			lge_ctrl_pdata->is_backup = true;
-		ret += ret_sub;
-	}
-#endif
-
-#if defined(CONFIG_LGE_DISPLAY_VR_MODE)
-	if (!lge_ctrl_pdata->vr_reg_backup) {
-		ret_sub = lge_vr_low_persist_reg_backup(ctrl_pdata);
-		if (ret_sub < 0)
-			pr_err("fail to backup VR Persist REG : %d\n", ret_sub);
-		else
-			lge_ctrl_pdata->vr_reg_backup = true;
-		ret += ret_sub;
-	}
-#endif
-
-#if defined(CONFIG_LGE_DISPLAY_AMBIENT_SUPPORTED)
-	if (!ctrl_pdata->ambient_reg_backup) {
-		ret_sub = lge_mdss_ambient_backup_internal_reg(ctrl_pdata);
-		if (ret_sub < 0)
-			pr_err("fail to backup Ambient REG : %d\n", ret_sub);
-		else
-			ctrl_pdata->ambient_reg_backup = true;
-		ret += ret_sub;
-	}
-#endif
-
 	return ret;
+}
+
+static int lge_panel_get_blmap_type(struct mdss_dsi_ctrl_pdata *ctrl)
+{
+	if (!LGE_DDIC_OP_CHECK(ctrl, get_blmap_type))
+		return 0;
+
+	return LGE_DDIC_OP(ctrl, get_blmap_type);
+}
+
+int lge_panel_br_to_bl(struct mdss_dsi_ctrl_pdata *ctrl, int br_lvl)
+{
+	int type = 0;
+	int *blmap = NULL;
+	int blmap_size = 0;
+
+	if (ctrl) {
+		type = lge_panel_get_blmap_type(ctrl);
+		pr_info("blmap type = %d\n", type);
+		if (ctrl->lge_extra.blmap_list_size && type >= 0 && type < ctrl->lge_extra.blmap_list_size) {
+			blmap = ctrl->lge_extra.blmap[type];
+			blmap_size = ctrl->lge_extra.blmap_size[type];
+		}
+	} else {
+		pr_err("ctrl is NULL\n");
+	}
+
+	if (blmap == NULL || blmap_size == 0) {
+		pr_err("there is no blmap\n");
+		return br_lvl?100:0;
+	}
+	if (br_lvl < 0)
+		br_lvl = 0;
+	if (br_lvl >= blmap_size)
+		br_lvl = blmap_size-1;
+
+	if (LGE_MP_FHB == ctrl->lge_extra.mplus_hd)
+		br_lvl = blmap_size-1;
+
+	return blmap[br_lvl];
 }

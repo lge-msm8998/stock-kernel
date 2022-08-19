@@ -9,7 +9,6 @@
 #include <linux/err.h>
 #include <linux/string.h>
 
-#include <linux/qpnp/qpnp-adc.h>
 #define BM_LDB_LOG
 
 #define BATT_MANAGER_NAME "lge,battery_manager"
@@ -45,6 +44,9 @@ enum sum_adc_value {
 	CURR,
 	OCV,
 	VOL,
+#ifdef CONFIG_QPNP_QNOVO
+	QNOVO_CURR,
+#endif
 	SUM_ADC_VALUE_MAX,
 };
 
@@ -67,6 +69,10 @@ static char *status_map[MAX] = {
 	"ABCC, ",
 	"ABNOR, ",
 	"DEGRADE, ",
+};
+
+static enum power_supply_property batt_mngr_properties[] = {
+	POWER_SUPPLY_PROP_BATTERY_CHARGING_ENABLED,
 };
 
 enum print_reason {
@@ -114,8 +120,12 @@ struct charging_param {
 	int cap_full;
 	int cap_now;
 	int cap_raw;
+	int chg_counter;
 	int chg_enabled;
 	int chg_time;
+#ifdef CONFIG_QPNP_QNOVO
+	int qnovo_current;
+#endif
 };
 #define CAP_BUF_MAX 10
 struct refer_param {
@@ -149,19 +159,23 @@ struct irb_param {
 struct batt_mngr {
 	struct device		*dev;
 	struct kobject		*kobj;
+	struct power_supply *batt_mngr_psy;
+	struct power_supply *bm_psy;
 	struct power_supply *cc_psy;
 	struct power_supply *batt_psy;
 	struct power_supply *bms_psy;
 	struct power_supply *usb_psy;
 	struct power_supply *dc_psy;
+	struct power_supply_desc bm_psy_desc;
 	struct delayed_work bm_monitor_work;
 	struct delayed_work bm_monitor_set_work;
 	struct delayed_work parameter_track_work;
-	struct work_struct bm_usb_handler_work;
 	struct refer_param	*ref;
-	struct notifier_block nb;
 	struct irb_param irbp;
 	int condition;
+#ifdef CONFIG_QPNP_QNOVO
+	struct power_supply *qnovo_psy;
+#endif
 };
 
 #define ABS(X) ((X) < 0 ? (-1 * (X)) : (X))
@@ -175,7 +189,6 @@ struct batt_mngr {
 #define LOG_MAX_SIZE 32
 #define LOG_MAX_LENGTH 256
 #define BM_PROC_NAME "driver/sbm"
-#define BM_DEMO_PROC_NAME "driver/usb_adc"
 static char *log_buffer[LOG_MAX_SIZE];
 static int log_index;
 static bool work_started;
@@ -223,13 +236,13 @@ static void batt_mngr_write_log(char *log, int size)
 		return;
 	}
 	mutex_lock(&mutex);
-	log_buffer[log_index] = kzalloc(sizeof(char) * size + 1, GFP_KERNEL);
+	log_buffer[log_index] = kzalloc(sizeof(char) * size, GFP_KERNEL);
 	if (log_buffer[log_index] == NULL) {
 		pr_bm(PR_ERR, "fail to allocate log_buffer\n");
 		return ;
 	}
 
-	strncpy(log_buffer[log_index], log, size);
+	strcpy(log_buffer[log_index], log);
 	log_index++;
 	mutex_unlock(&mutex);
 }
@@ -253,7 +266,6 @@ static int batt_mngr_proc_open(struct inode *inode, struct file *file)
 }
 
 struct proc_dir_entry *proc_bm_file;
-
 static const struct file_operations proc_file_fops = {
 	.open = batt_mngr_proc_open,
 	.read = seq_read,
@@ -282,6 +294,26 @@ static void batt_mngr_cleanup_proc(void)
 }
 #endif
 
+static int batt_mngr_set_fg_prop(struct power_supply *psy,
+	enum power_supply_property prop, int value)
+{
+	union power_supply_propval val = {0,};
+	int rc;
+
+	if (unlikely(psy == NULL)) {
+		pr_bm(PR_ERR, "%s, %d\n", __func__, __LINE__);
+		return -ENODEV;
+	}
+
+	val.intval = value;
+	rc = psy->desc->set_property(psy, prop, &val);
+	if (unlikely(rc))
+		pr_bm(PR_ERR, "%s, rc: %d, intval: %d\n",
+			__func__, rc, value);
+
+	return rc;
+}
+
 static void batt_mngr_reset_param(struct refer_param *r_param)
 {
 	memset(r_param, 0, sizeof(struct refer_param));
@@ -293,7 +325,7 @@ static void batt_mngr_battery_status(struct batt_mngr *bm,
 {
 	int size_status = strlen(status_map[status]);
 	int size_batt_info = strlen(batt_info);
-	char *log = (char *)kzalloc((size_status + size_batt_info + 1), GFP_KERNEL);
+	char *log = (char *)kzalloc((size_status + size_batt_info), GFP_KERNEL);
 	if (log == NULL) {
 		pr_bm(PR_ERR, "fail to allocate log\n");
 		return ;
@@ -450,6 +482,9 @@ static void batt_mngr_abnormal_voltage_monitor(struct batt_mngr *bm){
 		bm->condition |= ABVD_BIT;
 		rc = 1;
 	}
+	if (rc) {
+		batt_mngr_set_fg_prop(bm->bms_psy, POWER_SUPPLY_PROP_UPDATE_NOW, 1);
+	}
 }
 
 static void batt_mngr_calculate_cap(struct batt_mngr *bm){
@@ -467,7 +502,14 @@ static void batt_mngr_calculate_cap(struct batt_mngr *bm){
 	}
 
 	time_interval = jiffies_to_msecs(current_time - bm->ref->cm_past_time)/MSEC_TO_SECOND;
+#ifdef CONFIG_QPNP_QNOVO
+	if ((bm->ref->chg_data.chg_type ==  POWER_SUPPLY_CHARGE_TYPE_FAST) || (bm->ref->chg_data.chg_type == POWER_SUPPLY_CHARGE_TYPE_TRICKLE)) {
+		bm->ref->calculated_cap += (int)((time_interval * bm->ref->chg_data.qnovo_current) / HOUR_TO_SEC);
+	} else
+		bm->ref->calculated_cap -= (int)((time_interval * bm->ref->chg_data.curr) / HOUR_TO_SEC);
+#else
 	bm->ref->calculated_cap -= (int)((time_interval * bm->ref->chg_data.curr) / HOUR_TO_SEC);
+#endif
 	bm->ref->cm_past_time = current_time;
 }
 
@@ -561,12 +603,17 @@ static bool batt_mngr_get_charging_data(struct batt_mngr *bm){
 			batt_mngr_get_fg_prop(bm->bms_psy, POWER_SUPPLY_PROP_CHARGE_FULL, &bm->ref->chg_data.cap_full) ||
 			batt_mngr_get_fg_prop(bm->bms_psy, POWER_SUPPLY_PROP_CHARGE_NOW, &bm->ref->chg_data.cap_now) ||
 			batt_mngr_get_fg_prop(bm->bms_psy, POWER_SUPPLY_PROP_CHARGE_NOW_RAW, &bm->ref->chg_data.cap_raw) ||
+			batt_mngr_get_fg_prop(bm->bms_psy, POWER_SUPPLY_PROP_CHARGE_COUNTER, &bm->ref->chg_data.chg_counter) ||
 			batt_mngr_get_fg_prop(bm->batt_psy, POWER_SUPPLY_PROP_BATTERY_CHARGING_ENABLED, &bm->ref->chg_data.chg_enabled) ||
-			batt_mngr_get_fg_prop(bm->usb_psy, POWER_SUPPLY_PROP_REAL_TYPE, &bm->ref->chg_data.source_type) ||
+			batt_mngr_get_fg_prop(bm->usb_psy, POWER_SUPPLY_PROP_TYPE, &bm->ref->chg_data.source_type) ||
+#ifdef CONFIG_QPNP_QNOVO
+			batt_mngr_get_fg_prop(bm->qnovo_psy, POWER_SUPPLY_PROP_CURRENT_QNOVO, &bm->ref->chg_data.qnovo_current) ||
+#endif
 			bm->ref->count[COUNT_OC] == -1) {
 		pr_bm(PR_INFO, "Invalid adc or no count: %d\n", bm->ref->count[COUNT_OC]);
 		return false;
 	}
+	batt_mngr_set_fg_prop(bm->bms_psy, POWER_SUPPLY_PROP_UPDATE_NOW, 1);
 	return true;
 }
 
@@ -619,6 +666,7 @@ static void batt_mngr_status_check(struct batt_mngr *bm, char *log){
 static void batt_mngr_parameter_logger(struct batt_mngr *bm){
 	char log[LOG_MAX_LENGTH] = {0};
 	int i;
+	int current_idx = CURR;
 
 	if(!batt_mngr_get_charging_data(bm))
 		return;
@@ -628,27 +676,36 @@ static void batt_mngr_parameter_logger(struct batt_mngr *bm){
 	if(check_data_validity(RESIST, bm->ref->chg_data.resist) && check_data_validity(VOL, bm->ref->chg_data.ocv) && check_data_validity(VOL, bm->ref->chg_data.voltage)){
 		batt_mngr_parameter_monitor(bm);
 	}
-
+#ifdef CONFIG_QPNP_QNOVO
+	if ((bm->ref->chg_data.chg_type ==  POWER_SUPPLY_CHARGE_TYPE_FAST) || (bm->ref->chg_data.chg_type == POWER_SUPPLY_CHARGE_TYPE_TRICKLE)) {
+		current_idx = QNOVO_CURR;
+	} else {
+		current_idx = CURR;
+	}
+#endif
 	bm->ref->sum_adc_value[RESIST] += bm->ref->chg_data.resist;
 	bm->ref->sum_adc_value[CURR] -= bm->ref->chg_data.curr;
+#ifdef CONFIG_QPNP_QNOVO
+	bm->ref->sum_adc_value[QNOVO_CURR] += bm->ref->chg_data.qnovo_current;
+#endif
 	bm->ref->sum_adc_value[OCV] += bm->ref->chg_data.ocv;
 	bm->ref->sum_adc_value[VOL] += bm->ref->chg_data.voltage;
 
 	if((++bm->ref->count[COUNT_INFO]) >= 6) {
-		bm->ref->chg_data.cap_raw = bm->ref->chg_data.cap_raw > 0 ? bm->ref->chg_data.cap_raw : 0;
 		bm->ref->source_with_time = bm->ref->chg_data.source_type * SOURCE_TIME_PADDING +bm->ref->chg_data.chg_time;
-		bm->ref->cap_now_with_status = batt_mngr_get_condition(bm) * CONDITION_CAP_PADDING + bm->ref->chg_data.cap_raw / ADC_SCALE;
+		bm->ref->cap_now_with_status = batt_mngr_get_condition(bm) * CONDITION_CAP_PADDING + bm->ref->chg_data.chg_counter / ADC_SCALE;
+
 #ifdef BM_LDB_LOG
 		snprintf(log, sizeof(log)-1, "%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\n",
-				bm->ref->chg_data.soc,
-				bm->ref->chg_data.temp,
-				bm->ref->chg_data.cycle,
-				bm->ref->chg_data.cap_full/ADC_SCALE,
-				(bm->ref->sum_adc_value[OCV]/6)/ADC_SCALE,
-				(bm->ref->sum_adc_value[VOL]/6)/ADC_SCALE,
-				(bm->ref->sum_adc_value[CURR]/6)/ADC_SCALE,
-				(bm->ref->sum_adc_value[RESIST]/6)/ADC_SCALE,
-				bm->ref->source_with_time, bm->ref->cap_now_with_status);
+			bm->ref->chg_data.soc,
+			bm->ref->chg_data.temp,
+			bm->ref->chg_data.cycle,
+			bm->ref->chg_data.cap_full/ADC_SCALE,
+			(bm->ref->sum_adc_value[OCV]/6)/ADC_SCALE,
+			(bm->ref->sum_adc_value[VOL]/6)/ADC_SCALE,
+			(bm->ref->sum_adc_value[current_idx]/6)/ADC_SCALE,
+			(bm->ref->sum_adc_value[RESIST]/6)/ADC_SCALE,
+			bm->ref->source_with_time, bm->ref->cap_now_with_status);
 		batt_mngr_status_check(bm, log);
 #endif
 		for (i = 0; i < SUM_ADC_VALUE_MAX; i++)
@@ -661,17 +718,17 @@ static void batt_mngr_parameter_logger(struct batt_mngr *bm){
 static void batt_mngr_parameter_track_work(struct work_struct *work)
 {
 	struct batt_mngr *bm = container_of(work,
-			struct batt_mngr,
-			parameter_track_work.work);
+				struct batt_mngr,
+				parameter_track_work.work);
 	pr_bm(PR_INFO, "monitoring\n");
 	batt_mngr_parameter_logger(bm);
 
 	if (bm->ref->check_abvd && work_started == true) {
 		schedule_delayed_work(&bm->parameter_track_work,
-				round_jiffies_relative(msecs_to_jiffies(BM_PARAM_MONITOR_FAST)));
+			round_jiffies_relative(msecs_to_jiffies(BM_PARAM_MONITOR_FAST)));
 	} else if(work_started == true) {
 		schedule_delayed_work(&bm->parameter_track_work,
-				round_jiffies_relative(msecs_to_jiffies(BM_PARAM_MONITOR_NORMAL)));
+			round_jiffies_relative(msecs_to_jiffies(BM_PARAM_MONITOR_NORMAL)));
 	}
 }
 
@@ -716,6 +773,7 @@ static void battery_mngr_init_parameter(struct batt_mngr *bm)
 	bm->ref->chg_data.cap_now = 0;
 }
 
+
 static int batt_mngr_stop_work(struct batt_mngr *bm)
 {
 	if (bm == NULL || bm->ref == NULL) {
@@ -751,53 +809,11 @@ static int batt_mngr_start_work(struct batt_mngr *bm)
 	return 1;
 }
 
-static void batt_mngr_usb_handler_work(struct work_struct *work)
-{
-	struct batt_mngr *bm = container_of(work, struct batt_mngr, bm_usb_handler_work);
-	int usb_present = 0;
-	int dc_present = 0;
-
-	batt_mngr_get_fg_prop(bm->usb_psy, POWER_SUPPLY_PROP_PRESENT, &usb_present);
-	batt_mngr_get_fg_prop(bm->dc_psy, POWER_SUPPLY_PROP_PRESENT, &dc_present);
-
-	if (dc_present | usb_present) {
-		if(!work_started) {
-			work_started = true;
-			batt_mngr_start_work(bm);
-		}
-	} else {
-		if(work_started){
-			batt_mngr_stop_work(bm);
-		}
-	}
-}
-
-static int batt_mngr_notifier_call(struct notifier_block *nb, unsigned long ev, void *v) {
-	struct power_supply *psy = v;
-	struct batt_mngr *bm = container_of(nb, struct batt_mngr, nb);
-
-	if (!strcmp(psy->desc->name, "usb")) {
-		schedule_work(&bm->bm_usb_handler_work);
-	}
-	return NOTIFY_OK;
-}
-
-static int batt_mngr_register_notifier(struct batt_mngr *bm) {
-	int rc = 0;
-
-	bm->nb.notifier_call = batt_mngr_notifier_call;
-	rc = power_supply_reg_notifier(&bm->nb);
-	if (rc < 0) {
-		pr_bm(PR_ERR, "Couldn't register batt_mngr notifier = %d\n", rc);
-	}
-	return rc;
-}
-
 static void batt_mngr_monitor_work(struct work_struct *work)
 {
 	struct batt_mngr *bm = container_of(work,
-			struct batt_mngr,
-			bm_monitor_work.work);
+				struct batt_mngr,
+				bm_monitor_work.work);
 	int usb_present = 0;
 	int dc_present = 0;
 
@@ -811,10 +827,66 @@ static void batt_mngr_monitor_work(struct work_struct *work)
 	}
 }
 
+static int batt_mngr_set_property(struct power_supply *psy,
+	enum power_supply_property psp, const union power_supply_propval *val)
+{
+	struct batt_mngr *bm = power_supply_get_drvdata(psy);
+	if (bm == NULL) {
+		pr_bm(PR_ERR, "%s, %d\n", __func__, __LINE__);
+		return -ENODEV;
+	}
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_BATTERY_CHARGING_ENABLED:
+		if (val->intval == 1) {
+			if(work_started == false) {
+				work_started = true;
+				batt_mngr_start_work(bm);
+			} else {
+				pr_bm(PR_INFO, "work started\n");
+			}
+		} else {
+			batt_mngr_stop_work(bm);
+		}
+		break;
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
+
+
+static int batt_mngr_get_property(struct power_supply *psy,
+	enum power_supply_property bm_property, union power_supply_propval *val)
+{
+	struct batt_mngr *bm = power_supply_get_drvdata(psy);
+	int rc = 0;
+
+	if (bm == NULL) {
+		pr_bm(PR_ERR, "%s, %d\n", __func__, __LINE__);
+		return -ENODEV;
+	}
+
+	switch (bm_property) {
+	default:
+		return -EINVAL;
+	}
+	return rc;
+}
+
+static const struct power_supply_desc bm_desc = {
+	.set_property = batt_mngr_set_property,
+	.get_property = batt_mngr_get_property,
+	.properties = batt_mngr_properties,
+	.num_properties = ARRAY_SIZE(batt_mngr_properties),
+	.name = BM_PSY_NAME,
+};
+
 static int batt_mngr_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct batt_mngr *bm = NULL;
+	struct power_supply_config batt_mngr_psy_cfg;
 
 	bm = kzalloc(sizeof(struct batt_mngr), GFP_KERNEL);
 	if (bm == NULL) {
@@ -822,7 +894,7 @@ static int batt_mngr_probe(struct platform_device *pdev)
 		ret = -EPROBE_DEFER;
 		goto error;
 	}
-	bm->dev = &(pdev->dev);
+
 	bm->ref = kzalloc(sizeof(struct refer_param), GFP_KERNEL);
 	if (bm->ref == NULL) {
 		pr_bm(PR_ERR, "Not Ready(ref)\n");
@@ -836,7 +908,6 @@ static int batt_mngr_probe(struct platform_device *pdev)
 		ret = -EPROBE_DEFER;
 		goto error;
 	}
-
 	bm->bms_psy = power_supply_get_by_name(BMS_PSY_NAME);
 	if (bm->bms_psy == NULL) {
 		pr_bm(PR_ERR, "Not Ready(bms_psy)\n");
@@ -844,6 +915,33 @@ static int batt_mngr_probe(struct platform_device *pdev)
 		goto error;
 	}
 
+	batt_mngr_psy_cfg.drv_data = bm;
+	batt_mngr_psy_cfg.of_node = NULL;
+	batt_mngr_psy_cfg.supplied_to = NULL;
+	batt_mngr_psy_cfg.num_supplicants = 0;
+
+	bm->batt_mngr_psy  = power_supply_register(bm->dev, &bm_desc , &batt_mngr_psy_cfg);
+
+	if (ret < 0) {
+		pr_bm(PR_ERR, "%s power_supply_register charger controller failed ret=%d\n",
+			__func__, ret);
+		goto error;
+	}
+
+	bm->bm_psy = power_supply_get_by_name(BM_PSY_NAME);
+	if (bm->bm_psy == NULL) {
+		pr_bm(PR_ERR, "Not Ready(bm_psy)\n");
+		ret = -EPROBE_DEFER;
+		goto error;
+	}
+#ifdef CONFIG_QPNP_QNOVO
+	bm->qnovo_psy = power_supply_get_by_name("qcom,qnovo-driver");
+	if (bm->qnovo_psy == NULL) {
+		pr_bm(PR_ERR, "Not Ready(bm_qnovo)\n");
+		ret = -EPROBE_DEFER;
+		goto error;
+	}
+#endif
 	bm->usb_psy = power_supply_get_by_name(USB_PSY_NAME);
 	if (bm->usb_psy == NULL) {
 		pr_bm(PR_ERR, "Not Ready(usb_psy)\n");
@@ -858,19 +956,16 @@ static int batt_mngr_probe(struct platform_device *pdev)
 		goto error;
 	}
 
-	platform_set_drvdata(pdev, bm);
+
 	INIT_DELAYED_WORK(&bm->bm_monitor_set_work, batt_mngr_monitor_set_work);
 	INIT_DELAYED_WORK(&bm->parameter_track_work, batt_mngr_parameter_track_work);
 	INIT_DELAYED_WORK(&bm->bm_monitor_work, batt_mngr_monitor_work);
-	INIT_WORK(&bm->bm_usb_handler_work, batt_mngr_usb_handler_work);
+
+	platform_set_drvdata(pdev, bm);
+
 	schedule_delayed_work(&bm->bm_monitor_work,
 			round_jiffies_relative(msecs_to_jiffies(BM_MONITOR_WORK_TIME)));
 
-	ret = batt_mngr_register_notifier(bm);
-	if (ret < 0) {
-		pr_bm(PR_ERR, "notifier callback fail\n");
-		goto error;
-	}
 	work_started = true;
 	bm->condition = 0;
 	pr_bm(PR_INFO, "Probe done\n");
@@ -884,6 +979,8 @@ error:
 static int batt_mngr_remove(struct platform_device *pdev)
 {
 	struct batt_mngr *bm = platform_get_drvdata(pdev);
+
+	power_supply_unregister(bm->batt_mngr_psy);
 	kfree(bm);
 	return 0;
 }
@@ -905,8 +1002,8 @@ static const struct dev_pm_ops batt_mngr_pm_ops = {
 #endif
 
 static struct of_device_id batt_mngr_match_table[] = {
-	{ .compatible = BATT_MANAGER_NAME },
-	{ },
+		{ .compatible = BATT_MANAGER_NAME },
+		{ },
 };
 
 static struct platform_driver batt_mngr_driver = {
@@ -924,6 +1021,9 @@ static struct platform_driver batt_mngr_driver = {
 
 static struct platform_device batt_mngr_dev = {
 	.name = BM_PSY_NAME,
+	.dev = {
+		.platform_data = NULL,
+	}
 };
 
 static int __init batt_mngr_init(void)

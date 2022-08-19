@@ -34,8 +34,10 @@
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
 #include <linux/thermal.h>
+#ifndef CONFIG_LGE_USB_SWITCH_FUSB252
 #ifdef CONFIG_LGE_PM
 #include <linux/of_gpio.h>
+#endif
 #endif
 
 /* QPNP VADC register definition */
@@ -203,11 +205,12 @@ struct qpnp_vadc_chip {
 	bool				vadc_hc;
 	int				vadc_debug_count;
 	struct sensor_device_attribute	sens_attr[0];
+#ifndef CONFIG_LGE_USB_SWITCH_FUSB252
 #ifdef CONFIG_LGE_PM
 	uint32_t	sbu_sel;
 	uint32_t	sbu_oe;
 	uint32_t	edge_sel;
-	bool		pullup_volt_chk;
+#endif
 #endif
 };
 
@@ -544,8 +547,10 @@ int32_t qpnp_vadc_hc_read(struct qpnp_vadc_chip *vadc,
 {
 	int rc = 0, scale_type, amux_prescaling, dt_index = 0, calib_type = 0;
 	struct qpnp_adc_amux_properties amux_prop;
+#ifndef CONFIG_LGE_USB_SWITCH_FUSB252
 #if defined(CONFIG_LGE_PM) && defined(CONFIG_LGE_USB_MOISTURE_DETECTION)
 	int gpio_val, gpio_val2;
+#endif
 #endif
 
 	if (qpnp_vadc_is_valid(vadc))
@@ -553,14 +558,12 @@ int32_t qpnp_vadc_hc_read(struct qpnp_vadc_chip *vadc,
 
 	mutex_lock(&vadc->adc->adc_lock);
 
+#ifndef CONFIG_LGE_USB_SWITCH_FUSB252
 #ifdef CONFIG_LGE_PM
 	if (channel == VADC_AMUX_THM2) {
 #ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
 		gpio_val2 = gpiod_get_value(gpio_to_desc(vadc->sbu_oe));
-		if (vadc->pullup_volt_chk && !gpio_val2) {
-			gpiod_direction_output(gpio_to_desc(vadc->sbu_oe), true); /* /OE */
-			usleep_range(4000, 4100); /* Turn-Off Time /OE */
-		} else if (gpio_val2) {
+		if (gpio_val2) {
 			gpiod_direction_output(gpio_to_desc(vadc->sbu_oe), false); /* /OE */
 			usleep_range(40000, 41000); /* Turn-On Time /OE */
 		}
@@ -583,6 +586,7 @@ int32_t qpnp_vadc_hc_read(struct qpnp_vadc_chip *vadc,
 			usleep_range(100000, 101000); /* usb_edge settling */
 		}
 	}
+#endif
 #endif
 #endif
 
@@ -682,13 +686,11 @@ int32_t qpnp_vadc_hc_read(struct qpnp_vadc_chip *vadc,
 			channel, result->adc_code, result->physical);
 
 fail_unlock:
+#ifndef CONFIG_LGE_USB_SWITCH_FUSB252
 #ifdef CONFIG_LGE_PM
 	if (channel == VADC_AMUX_THM2) {
 #ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
-		if (vadc->pullup_volt_chk && !gpio_val2) {
-			gpiod_direction_output(gpio_to_desc(vadc->sbu_oe), false); /* /OE */
-			vadc->pullup_volt_chk = false;
-		} else if (gpio_val2) {
+		if (gpio_val2) {
 			gpiod_direction_output(gpio_to_desc(vadc->sbu_oe), true); /* /OE */
 		}
 
@@ -703,34 +705,12 @@ fail_unlock:
 	}
 #endif
 #endif
+#endif
 	mutex_unlock(&vadc->adc->adc_lock);
 
 	return rc;
 }
 EXPORT_SYMBOL(qpnp_vadc_hc_read);
-
-#ifdef CONFIG_LGE_PM
-int32_t qpnp_vadc_pullup_volt_chk(struct qpnp_vadc_chip *vadc,
-		enum qpnp_vadc_channels channel,
-		struct qpnp_vadc_result *result)
-{
-	int rc;
-
-	if (vadc->vadc_hc) {
-		mutex_lock(&vadc->adc->adc_lock);
-		vadc->pullup_volt_chk = true;
-		mutex_unlock(&vadc->adc->adc_lock);
-		rc = qpnp_vadc_hc_read(vadc, channel, result);
-
-		if (rc < 0) {
-			pr_err("Error reading vadc_hc channel %d\n", channel);
-			return rc;
-		}
-	}
-	return 0;
-}
-EXPORT_SYMBOL(qpnp_vadc_pullup_volt_chk);
-#endif
 
 static int32_t qpnp_vadc_configure(struct qpnp_vadc_chip *vadc,
 			struct qpnp_adc_amux_properties *chan_prop)
@@ -2842,6 +2822,7 @@ static int qpnp_vadc_probe(struct platform_device *pdev)
 
 	INIT_WORK(&vadc->trigger_completion_work, qpnp_vadc_work);
 
+#ifndef CONFIG_LGE_USB_SWITCH_FUSB252
 #ifdef CONFIG_LGE_PM
 	vadc->sbu_sel = of_get_named_gpio(pdev->dev.of_node, "lge,gpio-sbu-sel", 0);
 
@@ -2864,6 +2845,7 @@ static int qpnp_vadc_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Unable to edge gpio %d.\n", vadc->edge_sel);
 		goto err_setup;
 	}
+#endif
 #endif
 #endif
 

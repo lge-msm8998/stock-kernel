@@ -3618,6 +3618,7 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ENABLE_NON_DFS_CHAN_ON_RADAR_MIN,
 		     CFG_ENABLE_NON_DFS_CHAN_ON_RADAR_MAX),
 
+#ifdef FEATURE_SUPPORT_LGE
 	REG_VARIABLE(CFG_P2P_LISTEN_DEFER_INTERVAL_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, p2p_listen_defer_interval,
 		     VAR_FLAGS_OPTIONAL |
@@ -3625,6 +3626,7 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_P2P_LISTEN_DEFER_INTERVAL_DEFAULT,
 		     CFG_P2P_LISTEN_DEFER_INTERVAL_MIN,
 		     CFG_P2P_LISTEN_DEFER_INTERVAL_MAX),
+#endif
 
 	REG_VARIABLE(CFG_MULTICAST_HOST_FW_MSGS, WLAN_PARAM_Integer,
 		     struct hdd_config, multicast_host_fw_msgs,
@@ -5616,91 +5618,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ENABLE_DISABLE_CHANNEL_MIN,
 		     CFG_ENABLE_DISABLE_CHANNEL_MAX),
 
-	REG_VARIABLE(CFG_SET_BTC_MODE_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, set_btc_mode,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_BTC_MODE_DEFAULT,
-		     CFG_SET_BTC_MODE_MIN,
-		     CFG_SET_BTC_MODE_MAX),
-
-	REG_VARIABLE(CFG_SET_ANTENNA_ISOLATION_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, set_antenna_isolation,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_ANTENNA_ISOLATION_DEFAULT,
-		     CFG_SET_ANTENNA_ISOLATION_MIN,
-		     CFG_SET_ANTENNA_ISOLATION_MAX),
-
-	REG_VARIABLE(CFG_SET_MAX_TX_POWER_FOR_BTC_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, set_max_tx_power_for_btc,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_MAX_TX_POWER_FOR_BTC_DEFAULT,
-		     CFG_SET_MAX_TX_POWER_FOR_BTC_MIN,
-		     CFG_SET_MAX_TX_POWER_FOR_BTC_MAX),
-
-	REG_VARIABLE(CFG_SET_WLAN_LOW_RSSI_THRESHOLD_NAME,
-		     WLAN_PARAM_SignedInteger,
-		     struct hdd_config, set_wlan_low_rssi_threshold,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_WLAN_LOW_RSSI_THRESHOLD_DEFAULT,
-		     CFG_SET_WLAN_LOW_RSSI_THRESHOLD_MIN,
-		     CFG_SET_WLAN_LOW_RSSI_THRESHOLD_MAX),
-
-	REG_VARIABLE(CFG_SET_BT_LOW_RSSI_THRESHOLD_NAME,
-		     WLAN_PARAM_SignedInteger,
-		     struct hdd_config, set_bt_low_rssi_threshold,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_BT_LOW_RSSI_THRESHOLD_DEFAULT,
-		     CFG_SET_BT_LOW_RSSI_THRESHOLD_MIN,
-		     CFG_SET_BT_LOW_RSSI_THRESHOLD_MAX),
-
-	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_LOW_LL_NAME,
-		     WLAN_PARAM_SignedInteger,
-		     struct hdd_config, set_bt_interference_low_ll,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_LOW_LL_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_LOW_LL_MIN,
-		     CFG_SET_BT_INTERFERENCE_LOW_LL_MAX),
-
-	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_LOW_UL_NAME,
-		     WLAN_PARAM_SignedInteger,
-		     struct hdd_config, set_bt_interference_low_ul,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_LOW_UL_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_LOW_UL_MIN,
-		     CFG_SET_BT_INTERFERENCE_LOW_UL_MAX),
-
-	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_MEDIUM_LL_NAME,
-		     WLAN_PARAM_SignedInteger,
-		     struct hdd_config, set_bt_interference_medium_ll,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_MEDIUM_LL_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_MEDIUM_LL_MIN,
-		     CFG_SET_BT_INTERFERENCE_MEDIUM_LL_MAX),
-
-	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_MEDIUM_UL_NAME,
-		     WLAN_PARAM_SignedInteger,
-		     struct hdd_config, set_bt_interference_medium_ul,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_MEDIUM_UL_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_MEDIUM_UL_MIN,
-		     CFG_SET_BT_INTERFERENCE_MEDIUM_UL_MAX),
-
-	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_HIGH_LL_NAME,
-		     WLAN_PARAM_SignedInteger,
-		     struct hdd_config, set_bt_interference_high_ll,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_HIGH_LL_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_HIGH_LL_MIN,
-		     CFG_SET_BT_INTERFERENCE_HIGH_LL_MAX),
-
-	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_HIGH_UL_NAME,
-		     WLAN_PARAM_SignedInteger,
-		     struct hdd_config, set_bt_interference_high_ul,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_HIGH_UL_DEFAULT,
-		     CFG_SET_BT_INTERFERENCE_HIGH_UL_MIN,
-		     CFG_SET_BT_INTERFERENCE_HIGH_UL_MAX),
-
 	REG_VARIABLE(CFG_ENABLE_SECONDARY_RATE_NAME,
 		     WLAN_PARAM_HexInteger,
 		     struct hdd_config, enable_secondary_rate,
@@ -5731,21 +5648,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_MWS_COEX_5G_NR_PWR_LIMIT_MIN,
 		     CFG_MWS_COEX_5G_NR_PWR_LIMIT_MAX),
 #endif
-	REG_VARIABLE(CFG_ROAM_PREAUTH_RETRY_COUNT_NAME,
-		     WLAN_PARAM_Integer,
-		     struct hdd_config, roam_preauth_retry_count,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ROAM_PREAUTH_RETRY_COUNT_DEFAULT,
-		     CFG_ROAM_PREAUTH_RETRY_COUNT_MIN,
-		     CFG_ROAM_PREAUTH_RETRY_COUNT_MAX),
-
-	REG_VARIABLE(CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_NAME,
-		     WLAN_PARAM_Integer,
-		     struct hdd_config, roam_preauth_no_ack_timeout,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_DEFAULT,
-		     CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_MIN,
-		     CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_MAX),
 };
 
 /**
@@ -6007,13 +5909,12 @@ static int parse_hex_digit(char c)
  *
  * Return: None
  */
-static QDF_STATUS update_mac_from_string(hdd_context_t *pHddCtx,
-					 tCfgIniEntry *macTable, int num)
+static void update_mac_from_string(hdd_context_t *pHddCtx,
+				   tCfgIniEntry *macTable, int num)
 {
 	int i = 0, j = 0, res = 0;
 	char *candidate = NULL;
 	struct qdf_mac_addr macaddr[QDF_MAX_CONCURRENCY_PERSONA];
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	memset(macaddr, 0, sizeof(macaddr));
 
@@ -6031,12 +5932,8 @@ static QDF_STATUS update_mac_from_string(hdd_context_t *pHddCtx,
 				     provisioned_mac_addr[i].bytes[0],
 				     (uint8_t *) &macaddr[i].bytes[0],
 				     QDF_MAC_ADDR_SIZE);
-		} else {
-			status = QDF_STATUS_E_FAILURE;
-			break;
 		}
 	}
-	return status;
 }
 
 /**
@@ -6754,49 +6651,6 @@ static void hdd_cfg_print_action_oui(hdd_context_t *hdd_ctx)
 		CFG_ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN_NAME,
 		config->action_oui_connect_1x1_with_1_chain);
 
-}
-
-/**
- * hdd_cfg_print_btc_params() - print btc param values
- * @hdd_ctx: pointer to hdd context
- *
- * Return: None
- */
-static void hdd_cfg_print_btc_params(hdd_context_t *hdd_ctx)
-{
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_BTC_MODE_NAME,
-		  hdd_ctx->config->set_btc_mode);
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_ANTENNA_ISOLATION_NAME,
-		  hdd_ctx->config->set_antenna_isolation);
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_MAX_TX_POWER_FOR_BTC_NAME,
-		  hdd_ctx->config->set_max_tx_power_for_btc);
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_WLAN_LOW_RSSI_THRESHOLD_NAME,
-		  hdd_ctx->config->set_wlan_low_rssi_threshold);
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_BT_LOW_RSSI_THRESHOLD_NAME,
-		  hdd_ctx->config->set_bt_low_rssi_threshold);
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_BT_INTERFERENCE_LOW_LL_NAME,
-		  hdd_ctx->config->set_bt_interference_low_ll);
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_BT_INTERFERENCE_LOW_UL_NAME,
-		  hdd_ctx->config->set_bt_interference_low_ul);
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_BT_INTERFERENCE_MEDIUM_LL_NAME,
-		  hdd_ctx->config->set_bt_interference_medium_ll);
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_BT_INTERFERENCE_MEDIUM_UL_NAME,
-		  hdd_ctx->config->set_bt_interference_medium_ul);
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_BT_INTERFERENCE_HIGH_LL_NAME,
-		  hdd_ctx->config->set_bt_interference_high_ll);
-	hdd_debug("Name = [%s] value = [%d]",
-		  CFG_SET_BT_INTERFERENCE_HIGH_UL_NAME,
-		  hdd_ctx->config->set_bt_interference_high_ul);
 }
 
 /**
@@ -7765,14 +7619,8 @@ void hdd_cfg_print(hdd_context_t *pHddCtx)
 		  CFG_ROAM_FORCE_RSSI_TRIGGER_NAME,
 		  pHddCtx->config->roam_force_rssi_trigger);
 	hdd_cfg_print_mws_coex(pHddCtx);
-	hdd_debug("Name = [%s] Value = [%u]",
-		  CFG_ROAM_PREAUTH_RETRY_COUNT_NAME,
-		  pHddCtx->config->roam_preauth_retry_count);
-	hdd_debug("Name = [%s] Value = [%u]",
-		  CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_NAME,
-		  pHddCtx->config->roam_preauth_no_ack_timeout);
+
 	hdd_cfg_print_action_oui(pHddCtx);
-	hdd_cfg_print_btc_params(pHddCtx);
 }
 
 /**
@@ -7858,7 +7706,7 @@ QDF_STATUS hdd_update_mac_config(hdd_context_t *pHddCtx)
 		}
 		buffer = line;
 	}
-	if (i != 0 && i <= QDF_MAX_CONCURRENCY_PERSONA) {
+	if (i <= QDF_MAX_CONCURRENCY_PERSONA) {
 		hdd_debug("%d Mac addresses provided", i);
 	} else {
 		hdd_err("invalid number of Mac address provided, nMac = %d", i);
@@ -7866,11 +7714,7 @@ QDF_STATUS hdd_update_mac_config(hdd_context_t *pHddCtx)
 		goto config_exit;
 	}
 
-	qdf_status = update_mac_from_string(pHddCtx, &macTable[0], i);
-	if (QDF_IS_STATUS_ERROR(qdf_status)) {
-		hdd_err("Invalid MAC addresses provided");
-		goto config_exit;
-	}
+	update_mac_from_string(pHddCtx, &macTable[0], i);
 	pHddCtx->num_provisioned_addr = i;
 	hdd_debug("Populating remaining %d Mac addreses",
 		   max_mac_addr - i);
@@ -9330,6 +9174,7 @@ hdd_validate_and_convert_info_mask(uint8_t *token,
 
 	info_mask = hex_value;
 
+	info_mask |= WMI_ACTION_OUI_INFO_OUI;
 	hdd_ext->info_mask = info_mask;
 
 	if (!info_mask || !(info_mask & ~WMI_ACTION_OUI_INFO_OUI)) {
@@ -9340,16 +9185,6 @@ hdd_validate_and_convert_info_mask(uint8_t *token,
 	if (info_mask & ~WMI_ACTION_OUI_INFO_MASK) {
 		hdd_err("Invalid bits are set in action OUI info mask");
 		return false;
-	}
-
-	/*
-	 * If OUI bit is not set in the info presence, we need to ignore the
-	 * OUI and OUI Data. Set OUI and OUI data length to 0 here.
-	 */
-	if (!(info_mask & WMI_ACTION_OUI_INFO_OUI)) {
-		hdd_ext->oui_length = 0;
-		hdd_ext->data_length = 0;
-		hdd_ext->data_mask_length = 0;
 	}
 
 	if (info_mask & WMI_ACTION_OUI_INFO_MAC_ADDRESS) {
@@ -9519,6 +9354,11 @@ hdd_set_action_oui_ext(hdd_context_t *hdd_ctx,
 	struct wmi_action_oui_extension *wmi_ext;
 	int ret = 0;
 	QDF_STATUS qdf_status;
+
+	if (!hdd_ext.oui_length) {
+		hdd_err("Invalid oui length");
+		return -EINVAL;
+	}
 
 	wmi_ext = qdf_mem_malloc(sizeof(*wmi_ext));
 	if (!wmi_ext) {
@@ -10320,10 +10160,6 @@ QDF_STATUS hdd_set_sme_config(hdd_context_t *pHddCtx)
 		pHddCtx->config->enable_ftopen;
 	smeConfig->csrConfig.ho_delay_for_rx =
 		pHddCtx->config->ho_delay_for_rx;
-	smeConfig->csrConfig.roam_preauth_no_ack_timeout =
-		pHddCtx->config->roam_preauth_no_ack_timeout;
-	smeConfig->csrConfig.roam_preauth_retry_count =
-		pHddCtx->config->roam_preauth_retry_count;
 	smeConfig->csrConfig.min_delay_btw_roam_scans =
 		pHddCtx->config->min_delay_btw_roam_scans;
 	smeConfig->csrConfig.roam_trigger_reason_bitmask =
