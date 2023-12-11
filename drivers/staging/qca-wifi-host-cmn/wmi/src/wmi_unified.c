@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017,2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1156,8 +1156,8 @@ int wmi_get_host_credits(wmi_unified_t wmi_handle);
 
 #ifdef MEMORY_DEBUG
 wmi_buf_t
-wmi_buf_alloc_debug(wmi_unified_t wmi_handle, uint32_t len, uint8_t *file_name,
-		    uint32_t line_num)
+wmi_buf_alloc_debug(wmi_unified_t wmi_handle, uint16_t len, uint8_t *file_name,
+			uint32_t line_num)
 {
 	wmi_buf_t wmi_buf;
 
@@ -1190,7 +1190,7 @@ void wmi_buf_free(wmi_buf_t net_buf)
 	qdf_nbuf_free(net_buf);
 }
 #else
-wmi_buf_t wmi_buf_alloc(wmi_unified_t wmi_handle, uint32_t len)
+wmi_buf_t wmi_buf_alloc(wmi_unified_t wmi_handle, uint16_t len)
 {
 	wmi_buf_t wmi_buf;
 
@@ -1331,7 +1331,6 @@ QDF_STATUS wmi_unified_cmd_send(wmi_unified_t wmi_handle, wmi_buf_t buf,
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	qdf_mem_zero(qdf_nbuf_data(buf), sizeof(WMI_CMD_HDR));
 	WMI_SET_FIELD(qdf_nbuf_data(buf), WMI_CMD_HDR, COMMANDID, cmd_id);
 
 	qdf_atomic_inc(&wmi_handle->pending_cmds);
@@ -1713,7 +1712,7 @@ end:
 
 #define WMI_WQ_WD_TIMEOUT (10 * 1000) /* 10s */
 
-static inline void wmi_workqueue_watchdog_warn(uint32_t msg_type_id)
+static inline void wmi_workqueue_watchdog_warn(uint16_t msg_type_id)
 {
 	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
 		  "%s: Message type %x has exceeded its alloted time of %ds",
@@ -1723,11 +1722,7 @@ static inline void wmi_workqueue_watchdog_warn(uint32_t msg_type_id)
 #ifdef CONFIG_SLUB_DEBUG_ON
 static void wmi_workqueue_watchdog_bite(void *arg)
 {
-	struct wmi_wq_dbg_info *info = arg;
-
-	wmi_workqueue_watchdog_warn(info->wd_msg_type_id);
-	qdf_print_thread_trace(info->task);
-
+	wmi_workqueue_watchdog_warn(*(uint16_t *)arg);
 	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
 		  "%s: Going down for WMI WQ Watchdog Bite!", __func__);
 	QDF_BUG(0);
@@ -1735,9 +1730,7 @@ static void wmi_workqueue_watchdog_bite(void *arg)
 #else
 static inline void wmi_workqueue_watchdog_bite(void *arg)
 {
-	struct wmi_wq_dbg_info *info = arg;
-
-	wmi_workqueue_watchdog_warn(info->wd_msg_type_id);
+	wmi_workqueue_watchdog_warn(*(uint16_t *)arg);
 }
 #endif
 
@@ -1754,20 +1747,18 @@ static void wmi_rx_event_work(void *arg)
 	wmi_buf_t buf;
 	struct wmi_unified *wmi = arg;
 	qdf_timer_t wd_timer;
-	struct wmi_wq_dbg_info info;
+	uint16_t wd_msg_type_id;
 
 	/* initialize WMI workqueue watchdog timer */
 	qdf_timer_init(NULL, &wd_timer, &wmi_workqueue_watchdog_bite,
-			&info, QDF_TIMER_TYPE_SW);
+			&wd_msg_type_id, QDF_TIMER_TYPE_SW);
 	qdf_spin_lock_bh(&wmi->eventq_lock);
 	buf = qdf_nbuf_queue_remove(&wmi->event_queue);
 	qdf_spin_unlock_bh(&wmi->eventq_lock);
 	while (buf) {
 		qdf_timer_start(&wd_timer, WMI_WQ_WD_TIMEOUT);
-		info.wd_msg_type_id =
+		wd_msg_type_id =
 		   WMI_GET_FIELD(qdf_nbuf_data(buf), WMI_CMD_HDR, COMMANDID);
-		info.wmi_wq = wmi->wmi_rx_work_queue;
-		info.task = qdf_get_current_task();
 		__wmi_control_rx(wmi, buf);
 		qdf_timer_stop(&wd_timer);
 		qdf_spin_lock_bh(&wmi->eventq_lock);
