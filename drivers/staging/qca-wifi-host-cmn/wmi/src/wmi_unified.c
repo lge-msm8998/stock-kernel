@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2018,2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2018 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1147,8 +1147,8 @@ int wmi_get_host_credits(wmi_unified_t wmi_handle);
 
 #ifdef MEMORY_DEBUG
 wmi_buf_t
-wmi_buf_alloc_debug(wmi_unified_t wmi_handle, uint32_t len, uint8_t *file_name,
-		    uint32_t line_num)
+wmi_buf_alloc_debug(wmi_unified_t wmi_handle, uint16_t len, uint8_t *file_name,
+			uint32_t line_num)
 {
 	wmi_buf_t wmi_buf;
 
@@ -1181,7 +1181,7 @@ void wmi_buf_free(wmi_buf_t net_buf)
 	qdf_nbuf_free(net_buf);
 }
 #else
-wmi_buf_t wmi_buf_alloc(wmi_unified_t wmi_handle, uint32_t len)
+wmi_buf_t wmi_buf_alloc(wmi_unified_t wmi_handle, uint16_t len)
 {
 	wmi_buf_t wmi_buf;
 
@@ -1282,9 +1282,6 @@ QDF_STATUS wmi_unified_cmd_send(wmi_unified_t wmi_handle, wmi_buf_t buf,
 	HTC_PACKET *pkt;
 	QDF_STATUS status;
 	uint16_t htc_tag = 0;
-
-	if (wmi_handle->is_target_ready && !wmi_handle->is_target_ready())
-		return QDF_STATUS_E_FAILURE;
 
 	if (wmi_get_runtime_pm_inprogress(wmi_handle)) {
 		htc_tag =
@@ -2130,11 +2127,6 @@ wmi_stop(wmi_unified_t wmi_handle)
 		  "WMI Stop\n");
 	wmi_handle->wmi_stopinprogress = 1;
 	return 0;
-}
-
-void wmi_register_tgt_ready_cb(wmi_unified_t wmi_handle, bool (*cb)(void))
-{
-	wmi_handle->is_target_ready = cb;
 }
 
 #ifdef WMI_NON_TLV_SUPPORT
